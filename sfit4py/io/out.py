@@ -125,6 +125,11 @@ def read_statevec(filename):
         is_temp, has_converged, has_divwarn = list(map(
             lambda s: True if s == "T" else False, meta[3:]
         ))
+        outputd['n_iteration'] = niter
+        outputd['n_iteration_max'] = nitermax
+        outputd['is_temp'] = is_temp      # refactor ! what is 'istemp'?
+        outputd['has_converged'] = has_converged
+        outputd['has_division_warnings'] = has_divwarn
 
         # coords
         for c in ('altitude', 'pressure', 'temperature'):
