@@ -19,7 +19,11 @@ HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
 
 
 def parse_header(pattern, line):
-    """Parse headers an out file given the regular expression `pattern`."""
+    """
+    Parse the header line of an output file
+    given the regular expression `pattern`.
+
+    """
     m = re.match(pattern, line)
     metadata = m.groupdict()
 
@@ -40,6 +44,7 @@ def read_matrix(filename):
 
     Use this function to load the 'ak.out' and 'seinv.out'
     TODO: list here all files.
+
     """
     with open(filename, 'r') as f:
         outputd = parse_header(HEADER_PATTERN, f.readline())
@@ -59,6 +64,7 @@ def read_table(filename):
 
     Use this function to load the 'k.out', 'kb.out', 'sa.out', 'shat.out'...
     TODO: list here all files.
+
     """
     with open(filename, 'r') as f:
         outputd = parse_header(HEADER_PATTERN, f.readline())
@@ -84,6 +90,7 @@ def read_profiles(filename):
     Read a-priori or retrieved profiles.
 
     Use this function to load the 'aprfs.out' and 'rprfs.out' files.
+
     """
     with open(filename, 'r') as f:
         outputd = parse_header(HEADER_PATTERN, f.readline())
@@ -107,6 +114,7 @@ def read_statevec(filename):
     Read the state vector (a-priori and retrieved profiles / columns / params).
 
     Use this function to load the 'statevec' file.
+
     """
     with open(filename, 'r') as f:
         outputd = parse_header(HEADER_PATTERN, f.readline())
