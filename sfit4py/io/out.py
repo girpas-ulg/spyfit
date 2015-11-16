@@ -9,6 +9,7 @@ Python dictionaries and Numpy arrays.
 import datetime
 import re
 import os
+import math
 
 import numpy as np
 
@@ -17,37 +18,57 @@ HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
                   r"[\w\s:-]*RUNTIME:(?P<runtime>[0-9:\-]+)"
                   r"\s*(?P<description>.+)")
 
+# TODO: check resolution ?
+MW_HEADER_PATTERN = (r"\s*(?P<date>[0-9/]+),"
+                     r"\s*(?P<time>[0-9:]+),"
+                     r"\s*SCAN TIME:(?P<scan_time>[0-9.]*)\s*SEC\."
+                     r"\s*RES=\s*(?P<resolution>[0-9.]*).+")
 
-def parse_header(pattern, line):
+
+def parse_header(line):
     """
-    Parse the header line of an output file
-    given the regular expression `pattern`.
+    Parse the header line of an output file.
 
     """
-    m = re.match(pattern, line)
-    metadata = m.groupdict()
+    m = re.match(HEADER_PATTERN, line)
+    header = m.groupdict()
 
-    if 'runtime' in metadata.keys():
-        metadata['runtime'] = datetime.datetime.strptime(
-            metadata['runtime'], "%Y%m%d-%H:%M:%S"
-        )
+    header['runtime'] = datetime.datetime.strptime(
+        header['runtime'], "%Y%m%d-%H:%M:%S"
+    )
+    header['description'] = header['description'].strip().lower()
 
-    if 'description' in metadata.keys():
-        metadata['description'] = metadata['description'].strip().lower()
+    return header
 
-    return metadata
+
+def parse_mw_header(line):
+    """
+    Parse the header line of a micro-window.
+
+    """
+    m = re.match(MW_HEADER_PATTERN, line)
+    if m is None:
+        return {'failed to parse header': None}
+    header = m.groupdict()
+
+    header['datetime'] = datetime.datetime.strptime(
+        header.pop('date') + header.pop('time'), "%d/%m/%Y%H:%M:%S"
+    )
+    for k in ('scan_time', 'resolution'):
+        header[k] = float(header[k])
+
+    return header
 
 
 def read_matrix(filename):
     """
     Read single matrix (or single vector) output files.
 
-    Use this function to load the 'ak.out' and 'seinv.out'
-    TODO: list here all files.
+    Use this function to load 'out.ak_matrix' and 'out.seinv_vector'.
 
     """
     with open(filename, 'r') as f:
-        outputd = parse_header(HEADER_PATTERN, f.readline())
+        outputd = parse_header(f.readline())
         outputd['filename'] = os.path.abspath(filename)
 
         data_shape = tuple([int(d) for d in f.readline().split() if int(d) > 1])
@@ -60,14 +81,14 @@ def read_matrix(filename):
 
 def read_table(filename):
     """
-    Read tabular output data.
+    Read (labeled) tabular output data.
 
-    Use this function to load the 'k.out', 'kb.out', 'sa.out', 'shat.out'...
-    TODO: list here all files.
+    Use this function to load 'out.k_matrix', 'out.g_matrix', 'out.kb_matrix',
+    'out.sa_matrix' and 'out.shat_matrix'.
 
     """
     with open(filename, 'r') as f:
-        outputd = parse_header(HEADER_PATTERN, f.readline())
+        outputd = parse_header(f.readline())
         outputd['filename'] = os.path.abspath(filename)
 
         nrows, ncols = [int(n) for n in f.readline().split()[:2]]
@@ -89,17 +110,17 @@ def read_profiles(filename):
     """
     Read a-priori or retrieved profiles.
 
-    Use this function to load the 'aprfs.out' and 'rprfs.out' files.
+    Use this function to load 'out.retprofiles' and 'out.aprprofiles'.
 
     """
     with open(filename, 'r') as f:
-        outputd = parse_header(HEADER_PATTERN, f.readline())
+        outputd = parse_header(f.readline())
         outputd['filename'] = os.path.abspath(filename)
 
         meta = f.readline().split()
         nrows = int(meta[1])
-        outputd['retrieved_gaz'] = [g.strip() for g in meta[3:]]
-        outputd['gaz_index'] = list(map(int, f.readline().split()))
+        outputd['retrieved_gas'] = [g.strip() for g in meta[3:]]
+        outputd['gas_index'] = list(map(int, f.readline().split()))
         outputd['column_names'] = [c.strip() for c in f.readline().split()]
 
         data = np.loadtxt(f)
@@ -109,15 +130,16 @@ def read_profiles(filename):
     return outputd
 
 
-def read_statevec(filename):
+def read_state_vector(filename):
     """
-    Read the state vector (a-priori and retrieved profiles / columns / params).
+    Read the state vector (a-priori and retrieved profiles
+    - with calculated total columns - and extra parameters).
 
-    Use this function to load the 'statevec' file.
+    Use this function to load 'out.statevec'.
 
     """
     with open(filename, 'r') as f:
-        outputd = parse_header(HEADER_PATTERN, f.readline())
+        outputd = parse_header(f.readline())
         outputd['filename'] = os.path.abspath(filename)
 
         meta = f.readline().split()
@@ -127,7 +149,7 @@ def read_statevec(filename):
         ))
         outputd['n_iteration'] = niter
         outputd['n_iteration_max'] = nitermax
-        outputd['is_temp'] = is_temp      # refactor ! what is 'istemp'?
+        outputd['is_temp'] = is_temp      # TODO: refactor ! what is 'istemp'?
         outputd['has_converged'] = has_converged
         outputd['has_division_warnings'] = has_divwarn
 
@@ -136,21 +158,21 @@ def read_statevec(filename):
             dummy = f.readline()
             outputd[c] = np.fromfile(f, count=nlevels, sep=" ")
 
-        # gaz profiles / columns
+        # gas profiles / columns
         for k in ('apriori_profiles', 'apriori_total_columns',
                   'retrieved_profiles', 'retrieved_total_columns'):
             outputd[k] = dict()
 
         for i in range(int(f.readline())):
             dummy = f.readline()
-            gaz = f.readline().strip()
-            outputd['apriori_total_columns'][gaz] = float(f.readline())
-            outputd['apriori_profiles'][gaz] = np.fromfile(f, count=nlevels,
+            gas = f.readline().strip()
+            outputd['apriori_total_columns'][gas] = float(f.readline())
+            outputd['apriori_profiles'][gas] = np.fromfile(f, count=nlevels,
                                                            sep=" ")
             dummy = f.readline()
             dummy = f.readline()
-            outputd['retrieved_total_columns'][gaz] = float(f.readline())
-            outputd['retrieved_profiles'][gaz] = np.fromfile(f, count=nlevels,
+            outputd['retrieved_total_columns'][gas] = float(f.readline())
+            outputd['retrieved_profiles'][gas] = np.fromfile(f, count=nlevels,
                                                              sep=" ")
 
         # other parameters
@@ -166,5 +188,116 @@ def read_statevec(filename):
 
         outputd['apriori_params'] = np.fromfile(f, count=nparams, sep=" ")
         outputd['retrieved_params'] = np.fromfile(f, count=nparams, sep=" ")
+
+    return outputd
+
+
+def read_param_iterations(filename):
+    """
+    Read the state vector factors (parameters) for each iteration.
+
+    Use this function to load 'out.parm_vectors'.
+
+    """
+    with open(filename, 'r') as f:
+        outputd = parse_header(f.readline())
+        outputd['filename'] = os.path.abspath(filename)
+
+        n_params = int(f.readline())
+        outputd['param_index'] = list(map(int, f.readline().split()))
+        outputd['param_names'] = [n.strip() for n in f.readline().split()]
+        assert len(outputd['param_index']) == n_params
+        assert len(outputd['param_names']) == n_params
+
+        raw_data = np.loadtxt(f)
+        outputd['iterations'] = raw_data[:, 0].astype('i')
+        outputd['data'] = raw_data[:, 1:]
+
+    return outputd
+
+
+def read_spectra(filename):
+    """
+    Read observed, fitted and difference spectra.
+
+    Use this function to load 'out.pbpfile'.
+
+    """
+    with open(filename, 'r') as f:
+        outputd = parse_header(f.readline())
+        outputd['filename'] = os.path.abspath(filename)
+
+        # n_fits = nb. of micro-windows * nb. of spectra
+        # n_mw = nb. of micro windows
+        n_fits, n_mw = list(map(int, f.readline().split()))
+        micro_windows = []
+
+        # loop over each individual micro-windows (n_fits)
+        for i in range(n_fits):
+            mw = dict()
+
+            # micro-window header line
+            line = f.readline()
+            mw['header'] = line.strip()
+            mw.update(parse_mw_header(line))
+
+            # micro-window metadata line
+            line = f.readline()
+            metadata = list(map(eval, line.split()))
+            spec_code, wn_step, size, wn_min, wn_max = metadata[:5]
+            # TODO: refactor! what is u value???
+            u, band_id, scan_id, n_ret_gas = metadata[5:]
+            mw['spectrum_code'] = spec_code
+            mw['n_retrieval_gas'] = n_ret_gas
+            mw['band_id'], mw['scan_id'] = band_id, scan_id
+
+            # micro-window data: 3-line blocks of 12 values for each observed,
+            # fitted and difference spectra.
+            # 1st value of 1st line is the wavenumber (ignored, re-calculated)
+            n_vals_line = 12
+            labels = ('observed', 'fitted', 'difference')
+            slices = [slice(1, None), slice(None), slice(None)]
+            mw_data = [list(), list(), list()]
+
+            for block in range(int(math.ceil(1. * size / n_vals_line))):
+                for s, data in zip(slices, mw_data):
+                    data += list(map(float, f.readline().split()))[s]
+
+            for lbl, data in zip(labels, mw_data):
+                mw[lbl] = np.array(data)
+
+            mw['wavenumber'] = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
+            assert mw['wavenumber'].size == size
+
+            micro_windows.append(mw)
+
+        outputd['micro_windows'] = micro_windows
+
+    return outputd
+
+
+def read_single_spectrum(filename):
+    """
+    Read a single spectrum (i.e., for a given gaz, band, scan and
+    at a given iteration).
+
+    Use this function to load 'out.gas_spectra' files.
+
+    """
+    with open(filename, 'r') as f:
+        outputd = dict()
+        outputd['filename'] = os.path.abspath(filename)
+
+        header = f.readline().split()
+        outputd['gas'] = header[1].strip()
+        outputd['band_id'], outputd['scan_id'] = int(header[3]), int(header[5])
+        outputd['iteration'] = int(header[-1])
+
+        wn_min, wn_max, wn_step, size = map(eval, f.readline().split())
+        outputd['wavenumber'] = np.arange(wn_min, wn_max + wn_step / 2.,
+                                          wn_step)
+        outputd['data'] = np.loadtxt(f).flatten()
+        assert len(outputd['wavenumber']) == size
+        assert len(outputd['data']) == size
 
     return outputd
