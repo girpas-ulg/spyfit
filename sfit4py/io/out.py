@@ -84,7 +84,7 @@ def read_table(filename):
     Read (labeled) tabular output data.
 
     Use this function to load 'out.k_matrix', 'out.g_matrix', 'out.kb_matrix',
-    'out.sa_matrix' and 'out.shat_matrix'.
+    'out.sa_matrix', 'out.sainv_matrix' and 'out.shat_matrix'.
 
     """
     with open(filename, 'r') as f:
@@ -299,5 +299,26 @@ def read_single_spectrum(filename):
         outputd['data'] = np.loadtxt(f).flatten()
         assert len(outputd['wavenumber']) == size
         assert len(outputd['data']) == size
+
+    return outputd
+
+
+def read_solar_spectrum(filename):
+    """
+    Read a calculated solar spectrum.
+
+    Use this function to load 'out.solarspectrum'.
+
+    """
+    with open(filename, 'r') as f:
+        outputd = parse_header(f.readline())
+        outputd['filename'] = os.path.abspath(filename)
+
+        size, wn_min, wn_step = map(eval, f.readline().split())
+
+        data = np.loadtxt(f)
+        outputd['wavenumber'] = data[:, 0]
+        outputd['data'] = data[:, 1]
+        assert outputd['data'].size == size
 
     return outputd
