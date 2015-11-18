@@ -322,3 +322,72 @@ def read_solar_spectrum(filename):
         assert outputd['data'].size == size
 
     return outputd
+
+
+def read_summary(filename):
+    """
+    Read retrieval summary.
+
+    Use this function to read 'out.summary'.
+
+    """
+    with open(filename, 'r') as f:
+        outputd = parse_header(f.readline())
+        outputd['filename'] = os.path.abspath(filename)
+
+        # micro-window headers
+        dummy = f.readline()
+        mw_headers = []
+        for i in range(int(f.readline())):
+            mw_headers.append(f.readline().strip())
+        outputd['micro_window_headers'] = mw_headers
+
+        # retrieved gases
+        dummy = f.readline()
+        s2bool_func = lambda s: True if s == 'T' else False
+        cfuncs = [int, lambda s: s, s2bool_func, float, float]
+        ckeys = ['index', 'name', 'has_retrieved_profile',
+                 'apriori_total_column', 'retrieved_total_column']
+        ret_gases = []
+        n_gases = int(f.readline())
+        dummy = f.readline()
+        for i in range(n_gases):
+            cvals = [s.strip() for s in f.readline().split()]
+            ret_gases.append({k: f(v) for k, f, v in zip(ckeys, cfuncs, cvals)})
+        outputd['retrieved_gases'] = ret_gases
+
+        # bands
+        dummy = f.readline()
+        icfuncs = [int, float, float, float, int, float, float, float, int]
+        jcfuncs = [int, float, float]
+        ickeys = ['index', 'wavenumber_start', 'wavenumber_end',
+                  'wavenumber_step', 'n_points', 'pmax', 'fovdia']
+        jckeys = ['index', 'initial_snr', 'calculated_snr']
+        bands = []
+        n_bands = int(f.readline())
+        dummy = f.readline()
+        for i in range(n_bands):
+            icvals = [s.strip() for s in f.readline().split()]
+            d = {k: f(v) for k, f, v in zip(ickeys, icfuncs, icvals[:-1])}
+            scans = []
+            for j in range(int(icvals[-1])):
+                jcvals = [s.strip() for s in f.readline().split()]
+                scans.append(
+                    {k: f(v) for k, f, v in zip(jckeys, jcfuncs, jcvals)}
+                )
+            d['scans'] = scans
+            bands.append(d)
+        outputd['bands'] = bands
+
+        # other returned values
+        dummy = f.readline()
+        cfuncs = [lambda s: float(s) / 100, float, float, float, float,
+                  int, int, s2bool_func, s2bool_func]
+        ckeys = ['fit_rms', 'chi_square_obs', 'dofs_total',
+                 'dofs_trg', 'dofs_tpr', 'n_iterations', 'n_iterations_max',
+                 'has_converged', 'has_division_warnings']
+        dummy = f.readline()
+        cvals = [s.strip() for s in f.readline().split()]
+        outputd.update({k: f(v) for k, f, v in zip(ckeys, cfuncs, cvals)})
+
+    return outputd
