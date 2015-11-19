@@ -14,6 +14,12 @@ import math
 import numpy as np
 
 
+__all__ = ['read_matrix', 'read_table', 'read_profiles',
+           'read_state_vector', 'read_param_iterations',
+           'read_spectra', 'read_single_spectrum', 'read_solar_spectrum',
+           'read_summary']
+
+
 HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
                   r"[\w\s:-]*RUNTIME:(?P<runtime>[0-9:\-]+)"
                   r"\s*(?P<description>.+)")
@@ -122,6 +128,7 @@ def read_profiles(filename):
         outputd['retrieved_gas'] = [g.strip() for g in meta[3:]]
         outputd['gas_index'] = list(map(int, f.readline().split()))
         outputd['column_names'] = [c.strip() for c in f.readline().split()]
+        # TODO: redefine (and translate) the first 5 column names (coordinates)
 
         data = np.loadtxt(f)
         assert data.shape == (nrows, len(outputd['column_names']))
