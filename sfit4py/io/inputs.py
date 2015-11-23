@@ -7,11 +7,12 @@ Python dictionaries and Numpy arrays.
 """
 
 import re
+import datetime
 
 import numpy as np
 
 
-__all__ = ['read_layers', 'read_reference_profiles']
+__all__ = ['read_layers', 'read_reference_profiles', 'read_spectrum']
 
 
 REF_GAZ_PATTERN = r"\s*(?P<index>\d+)\s+(?P<name>\w+)\s+(?P<description>.+)"
@@ -35,9 +36,6 @@ def read_layers(filename):
         index, lbound, thick, growth, points = data.transpose()
 
         outputd['index'] = index[:-1].astype('i')
-        # TODO: follow this way of storing coordinates in all read functions
-        # see in `xray` how dictionnary arguments should be arranged for
-        # coordinates and variables
         outputd['altitude'] = {
             'points': points[:-1],
             'lower_bounds': lbound
@@ -55,20 +53,27 @@ def read_reference_profiles(filename):
     """
     with open(filename, 'r') as f:
         outputd = dict()
-        sorting, n_levels, n_gases = map(int, f.readline().split())
-        outputd['sort_descending'] = bool(sorting)
+        order_desc, n_levels, n_gases = map(int, f.readline().split())
+        if order_desc:
+            order = 'descending'
+        else:
+            order = 'ascending'
 
         # altitude, pressure and temperature profiles
-        for k in ('altitude', 'pressure', 'temperature'):
+        for profile in ('altitude', 'pressure', 'temperature'):
             description = f.readline().strip()
             data = np.fromfile(f, count=n_levels, sep=" ")
-            outputd[k] = {'points': data}
-            outputd[k]['points'] = data
-            outputd[k]['attributes'] = {'description': description}
+            outputd[profile] = {
+                'points': data,
+                'attributes': {
+                    'description': description,
+                    'order': order
+                }
+            }
 
         # gas profiles
         gases = []
-        for i in range(n_gases):
+        for iprofile in range(n_gases):
             header = re.match(REF_GAZ_PATTERN, f.readline()).groupdict()
             data = np.fromfile(f, count=n_levels, sep=" ")
             if header['name'] == 'OTHER':
@@ -80,6 +85,7 @@ def read_reference_profiles(filename):
                     'gas': header['name'],
                     'gas_index': int(header['index']),
                     'description': header['description'].strip(),
+                    'order': order
                 }
             }
             gases.append(gas)
@@ -87,3 +93,47 @@ def read_reference_profiles(filename):
         outputd['gases'] = gases
 
     return outputd
+
+
+def read_spectrum(filename):
+    """
+    Read a spectrum (bands and scans data).
+
+    Use this function to load 'in.spectrum'.
+
+    """
+    with open(filename, 'r') as f:
+        spectra = []
+
+        while True:
+            line = f.readline()
+            if not line:
+                break
+            sza, earth_radius, lat, lon, snr = map(float, line.split())
+
+            dt_items = list(map(int, re.split('[\s\.]+', f.readline())[:-1]))
+            dt_items[-1] *= 10     # convert decimal seconds to milliseconds
+            dt = datetime.datetime(*dt_items)
+
+            title = f.readline().strip()
+
+            wn_min, wn_max, wn_step, size = map(eval, f.readline().split())
+
+            data = np.fromfile(f, count=size, sep=" ")
+            wavenumber = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
+
+            spectra.append({
+                'data': data,
+                'wavenumber': wavenumber,  # TODO: treat it as a coordinate
+                'attributes': {
+                    'title': title,
+                    'solar_zenith_angle': sza,
+                    'earth_radius': earth_radius,
+                    'latitude': lat,
+                    'longitude': lon,
+                    'snr': snr,
+                    'datetime': dt
+                }
+            })
+
+    return {'spectra': spectra}
