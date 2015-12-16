@@ -33,26 +33,20 @@ MW_HEADER_PATTERN = (r"\s*(?P<date>[0-9/]+),"
 
 
 def parse_header(line):
-    """
-    Parse the header line of an output file.
-
-    """
+    """Parse the header line of an output file."""
     m = re.match(HEADER_PATTERN, line)
     header = m.groupdict()
 
-    header['runtime'] = datetime.datetime.strptime(
-        header['runtime'], "%Y%m%d-%H:%M:%S"
-    )
+    runtime = datetime.datetime.strptime(header.pop('runtime'),
+                                         "%Y%m%d-%H:%M:%S")
+    header['sfit4_runtime'] = str(runtime)
     header['description'] = header['description'].strip().lower()
 
     return header
 
 
 def parse_mw_header(line):
-    """
-    Parse the header line of a micro-window.
-
-    """
+    """Parse the header line of a micro-window."""
     m = re.match(MW_HEADER_PATTERN, line)
     if m is None:
         return {'failed to parse header': None}
@@ -67,75 +61,167 @@ def parse_mw_header(line):
     return header
 
 
-def read_matrix(filename):
-    """
-    Read single matrix (or single vector) output files.
+def read_matrix(filename, var_name='', dims=()):
+    """Read a single matrix (or a single vector) in SFIT4 output ascii files.
 
     Use this function to load 'out.ak_matrix' and 'out.seinv_vector'.
 
+    Parameters
+    ----------
+    filename : str
+        Name or path to the file.
+    var_name : str
+        Name chosen for the matrix/vector variable. If empty (default),
+        the name is set from `filename`.
+    dims : tuple
+        Name of the dimension(s) of the matrix/vector. If empty (default),
+        `('x',)` or `('x', 'y')` is set.
+
+    Returns
+    -------
+    dataset : dict
+        A CDM-structured dictionary.
+
     """
+    if not var_name:
+        var_name = os.path.basename(filename)
+
     with open(filename, 'r') as f:
-        outputd = parse_header(f.readline())
-        outputd['filename'] = os.path.abspath(filename)
+        header = parse_header(f.readline())
+        attrs = {'description': header.pop('description'),
+                 'source': os.path.abspath(filename)}
+        global_attrs = header
 
         data_shape = tuple([int(d) for d in f.readline().split() if int(d) > 1])
         data = np.loadtxt(f)
         assert data.shape == data_shape
-        outputd['data'] = data
 
-    return outputd
+        if not len(dims):
+            dims = ('x', 'y')[:data.ndim]
+
+        dataset = {
+            'variables': {
+                var_name: (dims, data, attrs),
+            },
+            'attrs': global_attrs
+        }
+
+    return dataset
 
 
-def read_table(filename):
+def read_table(filename, var_name='', dims=()):
     """
-    Read (labeled) tabular output data.
+    Read (labeled) tabular data in SFIT4 output ascii files.
 
     Use this function to load 'out.k_matrix', 'out.g_matrix', 'out.kb_matrix',
     'out.sa_matrix', 'out.sainv_matrix' and 'out.shat_matrix'.
 
+    Parameters
+    ----------
+    filename : str
+        Name or path to the file.
+    var_name : str
+        Name chosen for the tabular variable. If empty (default),
+        the name is set from `filename`.
+    dims : tuple
+        Name of the dimension(s) of the table. If empty (default),
+        `('rows', 'cols')` is set.
+
+    Returns
+    -------
+    dataset : dict
+        A CDM-structured dictionary.
+
     """
+    if not var_name:
+        var_name = os.path.basename(filename)
+
+    if not len(dims):
+            dims = ('rows', 'cols')
+
     with open(filename, 'r') as f:
-        outputd = parse_header(f.readline())
-        outputd['filename'] = os.path.abspath(filename)
+        header = parse_header(f.readline())
+        attrs = {'description': header.pop('description'),
+                 'source': os.path.abspath(filename)}
+        global_attrs = header
 
         nrows, ncols = [int(n) for n in f.readline().split()[:2]]
-        outputd['column_names'] = [c.strip() for c in f.readline().split()]
+        col_names = [c.strip() for c in f.readline().split()]
+        coords = {dims[1]: col_names}
 
         data = np.loadtxt(f)
         assert data.shape == (nrows, ncols)
 
-        if len(outputd['column_names']) != ncols:
-            assert len(outputd['column_names']) == nrows
+        if len(col_names) != ncols:
+            assert len(col_names) == nrows
             data = data.transpose()
 
-        outputd['data'] = data
+        dataset = {
+            'variables': {
+                var_name: (dims, data, attrs),
+            },
+            'coords': coords,
+            'attrs': global_attrs
+        }
 
-    return outputd
+    return dataset
 
 
-def read_profiles(filename):
+def read_profiles(filename, var_name_prefix='', dim='levels'):
     """
-    Read a-priori or retrieved profiles.
+    Read a-priori or retrieved profiles in SFIT4 output ascii files.
 
     Use this function to load 'out.retprofiles' and 'out.aprprofiles'.
 
+    Parameters
+    ----------
+    filename : str
+        Name or path to the file.
+    var_name_prefix : str
+        Prefix to prepend to each of the profile names (e.g., 'apriori_' or
+        'retrieved') (default: no prefix).
+    dim : str
+        Name of the dimension of the profiles. (default: 'levels').
+
+    Returns
+    -------
+    dataset : dict
+        A CDM-structured dictionary.
+
     """
     with open(filename, 'r') as f:
-        outputd = parse_header(f.readline())
-        outputd['filename'] = os.path.abspath(filename)
+        header = parse_header(f.readline())
+        global_attrs = {'source': os.path.abspath(filename)}
+        global_attrs.update(header)
 
         meta = f.readline().split()
         nrows = int(meta[1])
-        outputd['retrieved_gas'] = [g.strip() for g in meta[3:]]
-        outputd['gas_index'] = list(map(int, f.readline().split()))
-        outputd['column_names'] = [c.strip() for c in f.readline().split()]
+        retrieved_gases = [g.strip() for g in meta[3:]]
+        gas_index = list(map(int, f.readline().split()))
+        col_names = [c.strip() for c in f.readline().split()]
         # TODO: redefine (and translate) the first 5 column names (coordinates)
 
         data = np.loadtxt(f)
-        assert data.shape == (nrows, len(outputd['column_names']))
-        outputd['data'] = data
+        assert data.shape == (nrows, len(col_names))
 
-    return outputd
+        variables = {}
+        for cname, gindex, prof in zip(col_names, gas_index, data.transpose()):
+            if cname == 'OTHER':
+                continue
+            if gindex:
+                is_retrieved_gas = cname in retrieved_gases
+                attrs = {'gas_index': gindex,
+                         'is_retrieved_gas': is_retrieved_gas}
+            else:
+                attrs = {}
+            variables[var_name_prefix + cname] = ((dim,), prof, attrs)
+
+        dataset = {
+            'variables': variables,
+            'attrs': global_attrs
+        }
+
+    return dataset
 
 
 def read_state_vector(filename):
