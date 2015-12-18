@@ -25,12 +25,6 @@ HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
                   r"[\w\s:-]*RUNTIME:(?P<runtime>[0-9:\-]+)"
                   r"\s*(?P<description>.+)")
 
-# TODO: check resolution ?
-MW_HEADER_PATTERN = (r"\s*(?P<date>[0-9/]+),"
-                     r"\s*(?P<time>[0-9:]+),"
-                     r"\s*SCAN TIME:(?P<scan_time>[0-9.]*)\s*SEC\."
-                     r"\s*RES=\s*(?P<resolution>[0-9.]*).+")
-
 
 def parse_header(line):
     """Parse the header line of an output file."""
@@ -41,22 +35,6 @@ def parse_header(line):
                                          "%Y%m%d-%H:%M:%S")
     header['sfit4_runtime'] = str(runtime)
     header['description'] = header['description'].strip().lower()
-
-    return header
-
-
-def parse_mw_header(line):
-    """Parse the header line of a micro-window."""
-    m = re.match(MW_HEADER_PATTERN, line)
-    if m is None:
-        return {'failed to parse header': None}
-    header = m.groupdict()
-
-    header['datetime'] = datetime.datetime.strptime(
-        header.pop('date') + header.pop('time'), "%d/%m/%Y%H:%M:%S"
-    )
-    for k in ('scan_time', 'resolution'):
-        header[k] = float(header[k])
 
     return header
 
@@ -167,7 +145,7 @@ def read_table(filename, var_name='', dims=()):
     return dataset
 
 
-def read_profiles(filename, var_name_prefix='', dim='levels'):
+def read_profiles(filename, var_name_prefix='', ldim='levels'):
     """
     Read a-priori or retrieved profiles in SFIT4 output ascii files.
 
@@ -180,8 +158,8 @@ def read_profiles(filename, var_name_prefix='', dim='levels'):
     var_name_prefix : str
         Prefix to prepend to each of the profile names (e.g., 'apriori_' or
         'retrieved') (default: no prefix).
-    dim : str
-        Name of the dimension of the profiles. (default: 'levels').
+    ldim : str
+        Name of the dimension of the profiles (default: 'levels').
 
     Returns
     -------
@@ -214,7 +192,7 @@ def read_profiles(filename, var_name_prefix='', dim='levels'):
                          'is_retrieved_gas': is_retrieved_gas}
             else:
                 attrs = {}
-            variables[var_name_prefix + cname] = ((dim,), prof, attrs)
+            variables[var_name_prefix + cname] = ((ldim,), prof, attrs)
 
         dataset = {
             'variables': variables,
@@ -224,52 +202,73 @@ def read_profiles(filename, var_name_prefix='', dim='levels'):
     return dataset
 
 
-def read_state_vector(filename):
+def read_state_vector(filename, ldim='levels', pdim='param'):
     """
-    Read the state vector (a-priori and retrieved profiles
-    - with calculated total columns - and extra parameters).
+    Read the state vector in SFIT4 output ascii files.
+
+    The state vector includes a-priori and retrieved profiles
+    - with calculated total columns - and extra parameters.
 
     Use this function to load 'out.statevec'.
 
+    Parameters
+    ----------
+    filename : str
+        Name or path to the file.
+    ldim : str
+        Name of the dimension of the profiles (default: 'levels').
+    pdim : str
+        Name of the dimension of the parameters (default: 'param').
+
+    Returns
+    -------
+    dataset : dict
+        A CDM-structured dictionary.
+
     """
     with open(filename, 'r') as f:
-        outputd = parse_header(f.readline())
-        outputd['filename'] = os.path.abspath(filename)
+        header = parse_header(f.readline())
+        global_attrs = header
+        global_attrs['source'] = os.path.abspath(filename)
 
         meta = f.readline().split()
         nlevels, niter, nitermax = list(map(int, meta[:3]))
         is_temp, has_converged, has_divwarn = list(map(
             lambda s: True if s == "T" else False, meta[3:]
         ))
-        outputd['n_iteration'] = niter
-        outputd['n_iteration_max'] = nitermax
-        outputd['is_temp'] = is_temp      # TODO: refactor ! what is 'istemp'?
-        outputd['has_converged'] = has_converged
-        outputd['has_division_warnings'] = has_divwarn
+        global_attrs['n_iteration'] = niter
+        global_attrs['n_iteration_max'] = nitermax
+        global_attrs['is_temp'] = is_temp   # TODO: refactor ! what is 'istemp'?
+        global_attrs['has_converged'] = has_converged
+        global_attrs['has_division_warnings'] = has_divwarn
 
-        # coords
-        for c in ('altitude', 'pressure', 'temperature'):
+        # altitude is a coordinate
+        coords = {}
+        dummy = f.readline()
+        coords['altitude'] = ((ldim,), np.fromfile(f, count=nlevels, sep=" "))
+
+        # apriori profiles of pressure and temperature
+        variables = {}
+        for p in ('apriori_pressure', 'apriori_temperature'):
             dummy = f.readline()
-            outputd[c] = np.fromfile(f, count=nlevels, sep=" ")
+            variables[p] = ((ldim,), np.fromfile(f, count=nlevels, sep=" "))
 
-        # gas profiles / columns
-        for k in ('apriori_profiles', 'apriori_total_columns',
-                  'retrieved_profiles', 'retrieved_total_columns'):
-            outputd[k] = dict()
-
+        # apriori/retrieved gas profiles (and columns)
         for i in range(int(f.readline())):
             dummy = f.readline()
             gas = f.readline().strip()
-            outputd['apriori_total_columns'][gas] = float(f.readline())
-            outputd['apriori_profiles'][gas] = np.fromfile(f, count=nlevels,
-                                                           sep=" ")
-            dummy = f.readline()
-            dummy = f.readline()
-            outputd['retrieved_total_columns'][gas] = float(f.readline())
-            outputd['retrieved_profiles'][gas] = np.fromfile(f, count=nlevels,
-                                                             sep=" ")
+            attrs = {'total_column': float(f.readline())}
+            variables['apriori_'+gas] = (
+                (ldim,), np.fromfile(f, count=nlevels, sep=" "), attrs)
 
-        # other parameters
+            dummy = f.readline()
+            dummy = f.readline()
+            attrs = {'total_column': float(f.readline())}
+            variables['retrieved_'+gas] = (
+                (ldim,), np.fromfile(f, count=nlevels, sep=" "), attrs
+            )
+
+        # parameters
         nparams = int(f.readline())
 
         #    np.fromfile raises a SystemError for parameter names
@@ -278,62 +277,130 @@ def read_state_vector(filename):
             if len(pnames) >= nparams:
                 break
             pnames += [n.strip() for n in f.readline().split()]
-        outputd['param_names'] = pnames
+        coords[pdim] = pnames
 
-        outputd['apriori_params'] = np.fromfile(f, count=nparams, sep=" ")
-        outputd['retrieved_params'] = np.fromfile(f, count=nparams, sep=" ")
+        variables['apriori_parameters'] = (
+            (pdim,), np.fromfile(f, count=nparams, sep=" ")
+        )
+        variables['retrieved_parameters'] = (
+            (pdim,), np.fromfile(f, count=nparams, sep=" ")
+        )
 
-    return outputd
+    dataset = {
+        'variables': variables,
+        'coords': coords,
+        'attrs': global_attrs
+    }
+
+    return dataset
 
 
-def read_param_iterations(filename):
+def read_param_iterations(filename, sdim='statevector', idim='iterations'):
     """
-    Read the state vector factors (parameters) for each iteration.
+    Read the state vector for each iteration in SFIT4 ascii output files.
 
     Use this function to load 'out.parm_vectors'.
 
+    Parameters
+    ----------
+    filename : str
+        Name or path to the file.
+    sdim : str
+        Name of the dimension of the statevector (default: 'statevector').
+    idim : str
+        Name of the dimension of the iterations (default: 'iterations').
+
+    Returns
+    -------
+    dataset : dict
+        A CDM-structured dictionary.
+
     """
     with open(filename, 'r') as f:
-        outputd = parse_header(f.readline())
-        outputd['filename'] = os.path.abspath(filename)
+        header = parse_header(f.readline())
+        attrs = {'description': header.pop('description')}
+        global_attrs = header
+        global_attrs['source'] = os.path.abspath(filename)
 
         n_params = int(f.readline())
-        outputd['param_index'] = list(map(int, f.readline().split()))
-        outputd['param_names'] = [n.strip() for n in f.readline().split()]
-        assert len(outputd['param_index']) == n_params
-        assert len(outputd['param_names']) == n_params
+        param_index = list(map(int, f.readline().split()))
+        param_names = [n.strip() for n in f.readline().split()]
+        assert len(param_index) == n_params
+        assert len(param_names) == n_params
 
         raw_data = np.loadtxt(f)
-        outputd['iterations'] = raw_data[:, 0].astype('i')
-        outputd['data'] = raw_data[:, 1:]
+        iterations = raw_data[:, 0].astype('i')
+        data = raw_data[:, 1:]
 
-    return outputd
+        coords = {
+            sdim: param_names,
+            'statevector_index': (sdim, param_index),
+            idim: iterations
+        }
+        variables = {
+            'statevector_iterations': ((idim, sdim), data, attrs)
+        }
+
+        dataset = {
+            'variables': variables,
+            'coords': coords,
+            'attrs': global_attrs
+        }
+
+    return dataset
 
 
-def read_spectra(filename):
+def read_spectra(filename, wdim='wavenumber', parse_mw_header=None):
     """
-    Read observed, fitted and difference spectra.
+    Read observed and fitted spectra in SFIT4 ascii files.
 
     Use this function to load 'out.pbpfile'.
 
+    Parameters
+    ----------
+    filename : str
+        Name or path to the file.
+    wdim : str
+        Name of the dimension of the wavenumber (default: 'wavenumber'). This
+        is actually the prefix to which the name of the micro-window will be
+        added.
+    parse_mw_header : callable or None
+        A callable wich must accept the header line of a micro-window as input
+        and must return a dictionary of extracted metadata that will be added in
+        the attributes of the observed micro-window entry.
+        If None (default), only the plain header line (string) will be added
+        in the attributes.
+
+    Returns
+    -------
+    dataset : dict
+        A CDM-structured dictionary.
+
+    Notes
+    -----
+    To avoid duplicates, micro-window metadata will be added only in the
+    observed micro-window entries and not in the fitted entries.
+
     """
     with open(filename, 'r') as f:
-        outputd = parse_header(f.readline())
-        outputd['filename'] = os.path.abspath(filename)
+        header = parse_header(f.readline())
+        global_attrs = header
+        global_attrs['source'] = os.path.abspath(filename)
 
         # n_fits = nb. of micro-windows * nb. of spectra
         # n_mw = nb. of micro windows
         n_fits, n_mw = list(map(int, f.readline().split()))
-        micro_windows = []
 
         # loop over each individual micro-windows (n_fits)
+        coords = {}
+        variables = {}
         for i in range(n_fits):
-            mw = dict()
 
             # micro-window header line
             line = f.readline()
-            mw['header'] = line.strip()
-            mw.update(parse_mw_header(line))
+            attrs = {'header_line': line.strip()}
+            if parse_mw_header is not None:
+                attrs.update(parse_mw_header(line))
 
             # micro-window metadata line
             line = f.readline()
@@ -341,60 +408,106 @@ def read_spectra(filename):
             spec_code, wn_step, size, wn_min, wn_max = metadata[:5]
             # TODO: refactor! what is u value???
             u, band_id, scan_id, n_ret_gas = metadata[5:]
-            mw['spectrum_code'] = spec_code
-            mw['n_retrieval_gas'] = n_ret_gas
-            mw['band_id'], mw['scan_id'] = band_id, scan_id
+            attrs['spectrum_code'] = spec_code
+            attrs['n_retrieval_gas'] = n_ret_gas
+            attrs['band_id'], attrs['scan_id'] = band_id, scan_id
+
+            w_suffix = "_window_s{}b{}".format(scan_id, band_id)
+            wdim_suffix = wdim + w_suffix
 
             # micro-window data: 3-line blocks of 12 values for each observed,
             # fitted and difference spectra.
             # 1st value of 1st line is the wavenumber (ignored, re-calculated)
+            # difference spectra can be easily calculated, it is not returned.
             n_vals_line = 12
             labels = ('observed', 'fitted', 'difference')
             slices = [slice(1, None), slice(None), slice(None)]
-            mw_data = [list(), list(), list()]
+            w_data = [list(), list(), list()]
 
             for block in range(int(math.ceil(1. * size / n_vals_line))):
-                for s, data in zip(slices, mw_data):
+                for s, data in zip(slices, w_data):
                     data += list(map(float, f.readline().split()))[s]
 
-            for lbl, data in zip(labels, mw_data):
-                mw[lbl] = np.array(data)
+            for lbl, data in zip(labels, w_data):
+                if lbl == 'difference':
+                    continue
+                a = attrs
+                if lbl == 'fitted':
+                    a = {}
+                variables[lbl + w_suffix] = (wdim_suffix, np.array(data), a)
 
-            mw['wavenumber'] = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
-            assert mw['wavenumber'].size == size
+            wavenumber = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
+            assert wavenumber.size == size
+            coords[wdim_suffix] = wavenumber
 
-            micro_windows.append(mw)
+        dataset = {
+            'variables': variables,
+            'coords': coords,
+            'attrs': global_attrs
+        }
 
-        outputd['micro_windows'] = micro_windows
-
-    return outputd
+    return dataset
 
 
-def read_single_spectrum(filename):
+def read_single_spectrum(filename, var_name='', wdim='wavenumber'):
     """
-    Read a single spectrum (i.e., for a given gaz, band, scan and
-    at a given iteration).
+    Read a single spectrum in SFIT4 output ascii files.
+
+    a single spectrum stored in one file, e.g., for a given gaz, band, scan
+    and at a given iteration.
 
     Use this function to load 'out.gas_spectra' files.
 
+    Parameters
+    ----------
+    filename : str
+        Name or path to the file.
+    var_name : str
+        Name chosen for the spectrum variable. If empty (default),
+        the name is set from `filename`.
+    wdim : str
+        Name of the dimension of the wavenumber (default: 'wavenumber').
+        This is actually the prefix to which the name of the micro-window
+        will be added.
+
+    Returns
+    -------
+    dataset : dict
+        A CDM-structured dictionary.
+
     """
     with open(filename, 'r') as f:
-        outputd = dict()
-        outputd['filename'] = os.path.abspath(filename)
+        global_attrs = {'filename': os.path.abspath(filename)}
+
+        if not var_name:
+            # TODO: provide a function to sanatize var_name
+            # e.g., replace '.' by '_' to work with xray and autocompletion
+            var_name = os.path.basename(filename)
 
         header = f.readline().split()
-        outputd['gas'] = header[1].strip()
-        outputd['band_id'], outputd['scan_id'] = int(header[3]), int(header[5])
-        outputd['iteration'] = int(header[-1])
+        gas = header[1].strip()
+        band_id, scan_id = int(header[3]), int(header[5])
+        iteration = int(header[-1])
+
+        attrs = {'gaz': gas, 'band_id': band_id, 'scan_id': scan_id,
+                 'iteration': iteration}
+
+        w_suffix = "_window_s{}b{}".format(scan_id, band_id)
+        wdim += w_suffix
 
         wn_min, wn_max, wn_step, size = map(eval, f.readline().split())
-        outputd['wavenumber'] = np.arange(wn_min, wn_max + wn_step / 2.,
-                                          wn_step)
-        outputd['data'] = np.loadtxt(f).flatten()
-        assert len(outputd['wavenumber']) == size
-        assert len(outputd['data']) == size
+        wavenumber = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
+        data = np.loadtxt(f).flatten()
+        assert len(wavenumber) == size
+        assert len(data) == size
 
-    return outputd
+        dataset = {
+            'variables': {var_name: (wdim, data, attrs)},
+            'coords': {wdim: wavenumber},
+            'attrs': global_attrs
+        }
+
+    return dataset
 
 
 def read_solar_spectrum(filename):
