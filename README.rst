@@ -22,25 +22,26 @@ There are already Python codes related to SFIT4, e.g., those
 written by Eric Nussbaumer (the SFIT4 Layer0 and Layer1), Mathias Palm
 and Bavo Langerock.
 **spyfit** takes ideas from those codes and has features in common.
-Additionaly, it tries to follow as much as possible the good practices
-in the Python scientific ecosystem (e.g., readability, reproducibility,
-using standard formats, PEP8 style guide / numpy docstrings, packaging...).
-It also put emphasis on its integration with the libraries of the Python
-scientific ecosystem (including emerging packages like xray_) and using
-standard data models such as netCDF_.
+Additionaly, it aims to provide deep integration with the libraries of the
+Python scientific ecosystem (including emerging packages like xarray_) and using
+standard data models such as netCDF_. It also tries to follow as much as
+possible the good practices in that environment (e.g., readability,
+reproducibility, using standard formats, PEP8 style guide / numpy docstrings,
+packaging...).
+
 
 Main Features
 -------------
 
 - Use the `Common Data Model`_ to store and handle retrieval data.
-  The xray_ package - a required dependency - implements this data model and
+  The xarray_ package - a required dependency - implements this data model and
   provides a powerful framework for easy inspection, merging, processing and
   plotting of retrieval data.
 - Support various formats including:
     - netCDF_ (read/write)
     - SFIT4_ ascii output files (read-only) and input files (read/write)
     - GEOMS_ compliant HDF4 format (read/write)
-    - Easy export to various formats supported by xray_ and pandas_
+    - Easy export to various formats supported by xarray_ and pandas_
       (e.g., hdf5, csv, excel, SQL-databases...)
 - More readable, "pythonic" names for parameters and variables (also follow
   the `CF`_ standard names when possible). Possibility to revert to the names
@@ -55,7 +56,7 @@ Main Features
 .. _SFIT4: https://wiki.ucar.edu/display/sfit4/Infrared+Working+Group+Retrieval+Code,+SFIT
 .. _Common Data Model: http://www.unidata.ucar.edu/software/thredds/current/netcdf-java/CDM
 .. _netCDF: http://www.unidata.ucar.edu/software/netcdf
-.. _xray: https://github.com/xray/xray
+.. _xarray: http://xarray.pydata.org
 .. _pandas: http://pandas.pydata.org/
 .. _CF: http://cfconventions.org/
 .. _GEOMS: http://avdc.gsfc.nasa.gov/index.php?site=1178067684
