@@ -83,7 +83,7 @@ def read_matrix(filename, var_name='', dims=''):
             dims = ('x', 'y')[:data.ndim]
 
         dataset = {
-            'variables': {
+            'data_vars': {
                 var_name: (dims, data, attrs),
             },
             'attrs': global_attrs
@@ -140,7 +140,7 @@ def read_table(filename, var_name='', dims=()):
             data = data.transpose()
 
         dataset = {
-            'variables': {
+            'data_vars': {
                 var_name: (dims, data, attrs),
             },
             'coords': coords,
@@ -206,7 +206,7 @@ def read_profiles(filename, var_name_prefix='', ldim='level', ret_gases=False):
             variables[var_name_prefix + '__' + cname] = ((ldim,), prof, attrs)
 
         dataset = {
-            'variables': variables,
+            'data_vars': variables,
             'attrs': global_attrs
         }
 
@@ -301,7 +301,7 @@ def read_state_vector(filename, ldim='level', pdim='param'):
         )
 
     dataset = {
-        'variables': variables,
+        'data_vars': variables,
         'coords': coords,
         'attrs': global_attrs
     }
@@ -356,7 +356,7 @@ def read_param_iterations(filename, vdim='statevector', idim='iteration'):
         }
 
         dataset = {
-            'variables': variables,
+            'data_vars': variables,
             'coords': coords,
             'attrs': global_attrs
         }
@@ -507,7 +507,7 @@ def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
                 variables[vname] = ((sdim, wdim_band), np.ma.row_stack(data))
 
         dataset = {
-            'variables': variables,
+            'data_vars': variables,
             'coords': coords,
             'attrs': global_attrs
         }
@@ -568,7 +568,7 @@ def read_single_spectrum(filename, var_name=None, wdim='wn'):
         assert len(data) == size
 
         dataset = {
-            'variables': {var_name: (wdim_band, data, attrs)},
+            'data_vars': {var_name: (wdim_band, data, attrs)},
             'coords': {wdim_band: wavenumber},
             'attrs': global_attrs
         }
@@ -614,7 +614,7 @@ def read_solar_spectrum(filename, var_name='', wdim='wn'):
         assert spectrum.size == size
 
         dataset = {
-            'variables': {var_name: ((wdim,), spectrum)},
+            'data_vars': {var_name: ((wdim,), spectrum)},
             'coords': {wdim: wavenumber},
             'attrs': global_attrs
         }
