@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 
-"""
-Functions for loading/saving/concatenating retrievals using the
-`xray` package (https://github.com/xray/xray).
+"""Load/Save retrieval data from/into `xray` datasets.
+
+It allows to easily handle, concatenate and plot retrieval data from
+different sources (e.g., SFIT4 IO ascii files, netCDF or HDF4 GEOMS files)
+using the data model and high-level API functions implemented in `xray`
+(https://github.com/xray/xray).
 
 """
 
@@ -11,7 +14,7 @@ import xray
 
 def open_retrieval(path):
     """
-    Load retrieval data as a :class:`xray.Dataset`.
+    Load retrieval data as a `xray.Dataset` object.
 
     Parameters
     ----------
@@ -22,7 +25,7 @@ def open_retrieval(path):
 
     Returns
     -------
-    dataset : :class:`xray.Dataset` object
+    dataset : `xray.Dataset` object
         The loaded dataset.
 
     """

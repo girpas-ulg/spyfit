@@ -4,9 +4,9 @@ Installation
 
 At the command line::
 
-    $ easy_install sfit4py
+    $ easy_install spyfit
 
 Or, if you have virtualenvwrapper installed::
 
-    $ mkvirtualenv sfit4py
-    $ pip install sfit4py
+    $ mkvirtualenv spyfit
+    $ pip install spyfit

@@ -26,5 +26,5 @@ deploy:
     secure: PLEASE_REPLACE_ME
   on:
     tags: true
-    repo: benbovy/sfit4py
+    repo: benbovy/spyfit
     condition: $TOXENV == py27

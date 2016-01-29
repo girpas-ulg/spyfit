@@ -23,23 +23,23 @@ test_requirements = [
 ]
 
 setup(
-    name='sfit4py',
+    name='spyfit',
     version='0.1.0',
     description="Python interface to SFIT4",
     long_description=readme + '\n\n' + history,
     author="Benoit Bovy",
     author_email='bbovy@ulg.ac.be',
-    url='https://github.com/benbovy/sfit4py',
+    url='https://github.com/benbovy/spyfit',
     packages=[
-        'sfit4py',
+        'spyfit',
     ],
-    package_dir={'sfit4py':
-                 'sfit4py'},
+    package_dir={'spyfit':
+                 'spyfit'},
     include_package_data=True,
     install_requires=requirements,
     license="ISCL",
     zip_safe=False,
-    keywords='sfit4py',
+    keywords='spyfit',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',

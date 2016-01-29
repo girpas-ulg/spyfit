@@ -2,6 +2,6 @@
 Usage
 ========
 
-To use sfit4py in a project::
+To use spyfit in a project::
 
-    import sfit4py
+    import spyfit

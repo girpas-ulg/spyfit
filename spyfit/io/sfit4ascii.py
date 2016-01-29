@@ -44,7 +44,7 @@ def sanatize_name(var_name):
     return var_name.lower().replace('.', '__')
 
 
-def read_matrix(filename, var_name='', dims=()):
+def read_matrix(filename, var_name='', dims=''):
     """Read a single matrix (or a single vector) in SFIT4 output ascii files.
 
     Use this function to load 'out.ak_matrix' and 'out.seinv_vector'.
@@ -56,9 +56,9 @@ def read_matrix(filename, var_name='', dims=()):
     var_name : str
         Name chosen for the matrix/vector variable. If empty (default),
         the name is set from `filename`.
-    dims : tuple
+    dims : tuple or str
         Name of the dimension(s) of the matrix/vector. If empty (default),
-        `('x',)` or `('x', 'y')` is set.
+        `'x'` or `('x', 'y')` is set.
 
     Returns
     -------
@@ -150,7 +150,7 @@ def read_table(filename, var_name='', dims=()):
     return dataset
 
 
-def read_profiles(filename, var_name_prefix='', ldim='levels'):
+def read_profiles(filename, var_name_prefix='', ldim='level', ret_gases=False):
     """
     Read a-priori or retrieved profiles in SFIT4 output ascii files.
 
@@ -164,7 +164,10 @@ def read_profiles(filename, var_name_prefix='', ldim='levels'):
         Prefix to prepend to each of the profile names (e.g., 'apriori' or
         'retrieved') (default: no prefix).
     ldim : str
-        Name of the dimension of the profiles (default: 'levels').
+        Name of the dimension of the profiles (default: 'level').
+    ret_gases : bool
+        If True, returns the profiles of only the retrieved gases
+        (default: False).
 
     Returns
     -------
@@ -193,9 +196,12 @@ def read_profiles(filename, var_name_prefix='', ldim='levels'):
                 continue
             if gindex:
                 is_retrieved_gas = cname in retrieved_gases
+                if ret_gases and not is_retrieved_gas:
+                    continue
                 attrs = {'gas_index': gindex,
                          'is_retrieved_gas': is_retrieved_gas}
             else:
+                cname = cname.lower()   # lower-case name for non-gases profiles
                 attrs = {}
             variables[var_name_prefix + '__' + cname] = ((ldim,), prof, attrs)
 
@@ -207,7 +213,7 @@ def read_profiles(filename, var_name_prefix='', ldim='levels'):
     return dataset
 
 
-def read_state_vector(filename, ldim='levels', pdim='param'):
+def read_state_vector(filename, ldim='level', pdim='param'):
     """
     Read the state vector in SFIT4 output ascii files.
 
@@ -221,7 +227,7 @@ def read_state_vector(filename, ldim='levels', pdim='param'):
     filename : str
         Name or path to the file.
     ldim : str
-        Name of the dimension of the profiles (default: 'levels').
+        Name of the dimension of the profiles (default: 'level').
     pdim : str
         Name of the dimension of the parameters (default: 'param').
 
@@ -358,7 +364,7 @@ def read_param_iterations(filename, vdim='statevector', idim='iteration'):
     return dataset
 
 
-def read_spectra(filename, wdim='wavenumber', bdim='band', sdim='scan',
+def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
                  parse_sp_header=None):
     """
     Read observed and fitted spectra in SFIT4 ascii files.
@@ -370,7 +376,7 @@ def read_spectra(filename, wdim='wavenumber', bdim='band', sdim='scan',
     filename : str
         Name or path to the file.
     wdim : str
-        Name of the dimension of the wavenumber (default: 'wavenumber'). This
+        Name of the dimension of the wavenumber (default: 'wn'). This
         is actually a prefix to which the band number will be added.
     bdim : str
         Name of the dimension of the bands (default: 'band').
@@ -509,7 +515,7 @@ def read_spectra(filename, wdim='wavenumber', bdim='band', sdim='scan',
     return dataset
 
 
-def read_single_spectrum(filename, var_name='', wdim='wavenumber'):
+def read_single_spectrum(filename, var_name=None, wdim='wn'):
     """
     Read a single spectrum in SFIT4 output ascii files.
 
@@ -523,12 +529,12 @@ def read_single_spectrum(filename, var_name='', wdim='wavenumber'):
     filename : str
         Name or path to the file.
     var_name : str
-        Name chosen for the spectrum variable. If empty (default),
-        the name is set from `filename`.
+        Name chosen for the spectrum variable. If empty, the name is set
+        from `filename`. If None (default), the name is defined from the
+        spectrum metadata (gas, band, scan and iteration).
     wdim : str
-        Name of the dimension of the wavenumber (default: 'wavenumber').
-        This is actually the prefix to which the name of the micro-window
-        will be added.
+        Name of the dimension of the wavenumber (default: 'wn').
+        This is actually the prefix to which the band id will be added.
 
     Returns
     -------
@@ -539,9 +545,6 @@ def read_single_spectrum(filename, var_name='', wdim='wavenumber'):
     with open(filename, 'r') as f:
         global_attrs = {'filename': os.path.abspath(filename)}
 
-        if not var_name:
-            var_name = sanatize_name(os.path.basename(filename))
-
         header = f.readline().split()
         gas = header[1].strip()
         band_id, scan_id = int(header[3]), int(header[5])
@@ -550,25 +553,30 @@ def read_single_spectrum(filename, var_name='', wdim='wavenumber'):
         attrs = {'gaz': gas, 'band_id': band_id, 'scan_id': scan_id,
                  'iteration': iteration}
 
-        w_suffix = "_window_s{}b{}".format(scan_id, band_id)
-        wdim += w_suffix
+        if var_name is None:
+            var_name = "fitted_spectrum__{}__band{}__s{}i{}".format(
+                gas, band_id, scan_id, iteration
+            )
+        if not var_name:
+            var_name = sanatize_name(os.path.basename(filename))
 
         wn_min, wn_max, wn_step, size = map(eval, f.readline().split())
         wavenumber = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
+        wdim_band = '{}__band{}'.format(wdim, band_id)
         data = np.loadtxt(f).flatten()
         assert len(wavenumber) == size
         assert len(data) == size
 
         dataset = {
-            'variables': {var_name: (wdim, data, attrs)},
-            'coords': {wdim: wavenumber},
+            'variables': {var_name: (wdim_band, data, attrs)},
+            'coords': {wdim_band: wavenumber},
             'attrs': global_attrs
         }
 
     return dataset
 
 
-def read_solar_spectrum(filename, var_name='', wdim='wavenumber'):
+def read_solar_spectrum(filename, var_name='', wdim='wn'):
     """
     Read a calculated solar spectrum in SFIT4 output ascii files.
 
@@ -582,7 +590,7 @@ def read_solar_spectrum(filename, var_name='', wdim='wavenumber'):
         Name chosen for the spectrum variable. If empty (default),
         the name is set from `filename`.
     wdim : str
-        Name of the dimension of the wavenumber (default: 'wavenumber').
+        Name of the dimension of the wavenumber (default: 'wn').
 
     Returns
     -------

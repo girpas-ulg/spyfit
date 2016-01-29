@@ -2,18 +2,18 @@
 # -*- coding: utf-8 -*-
 
 """
-test_sfit4py
+test_spyfit
 ----------------------------------
 
-Tests for `sfit4py` module.
+Tests for `spyfit` module.
 """
 
 import unittest
 
-from sfit4py import sfit4py
+from spyfit import spyfit
 
 
-class TestSfit4py(unittest.TestCase):
+class TestSpyfit(unittest.TestCase):
 
     def setUp(self):
         pass
