@@ -21,13 +21,13 @@ Why spyfit?
 There are already Python codes related to SFIT4, e.g., those
 written by Eric Nussbaumer (the SFIT4 Layer0 and Layer1), Mathias Palm
 and Bavo Langerock.
-**spyfit** takes ideas from those codes and has features in common.
-Additionaly, it aims to provide deep integration with the libraries of the
-Python scientific ecosystem (including emerging packages like xarray_) and using
-standard data models such as netCDF_. It also tries to follow as much as
-possible the good practices in that environment (e.g., readability,
-reproducibility, using standard formats, PEP8 style guide / numpy docstrings,
-packaging...).
+**spyfit** takes ideas from those codes and has features in common while
+it allows more flexibility. Additionaly, it aims to provide deep integration
+with the libraries of the Python scientific ecosystem (including emerging
+packages like xarray_) and using standard data models such as netCDF_.
+It also tries to follow as much as possible the good practices of Python
+coding (e.g., readability, reproducibility, using standard formats,
+PEP8 style guide / numpy docstrings, packaging...).
 
 
 Main Features
