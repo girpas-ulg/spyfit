@@ -1,25 +1,21 @@
 # -*- coding: utf-8 -*-
 
-"""Read (write) SFIT4 input and output ascii files."""
+"""Read SFIT4 output ascii files into xarray-compliant dictionnaries."""
 
 import datetime
 import re
 import os
 import math
+import glob
 
 import numpy as np
 
 
 __all__ = ['read_matrix', 'read_table', 'read_profiles',
            'read_state_vector', 'read_param_iterations',
-           'read_spectra', 'read_single_spectrum', 'read_solar_spectrum',
-           'read_summary', 'read_layers', 'read_reference_profiles',
-           'read_spectrum']
+           'read_spectra', 'read_single_spectrum', 'read_single_spectra',
+           'read_solar_spectrum', 'read_summary']
 
-
-# ---------------------------------------
-# output files
-# ---------------------------------------
 
 HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
                   r"[\w\s:-]*RUNTIME:(?P<runtime>[0-9:\-]+)"
@@ -229,7 +225,7 @@ def read_state_vector(filename, ldim='level', pdim='param'):
     ldim : str
         Name of the dimension of the profiles (default: 'level').
     pdim : str
-        Name of the dimension of the parameters (default: 'param').
+         Name of the dimension of the parameters (default: 'param').
 
     Returns
     -------
@@ -391,7 +387,7 @@ def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
 
     Returns
     -------
-    dataset : dict
+    datase t : dict
         A CDM-structured dictionary.
 
     Notes
@@ -414,7 +410,7 @@ def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
         wavenumber = {}
         sdim_vars = {
             'spectrum_sza_code': {},
-        }
+         }
         bdim_vars = {
             'n_retrieved_gas': {}
         }
@@ -517,10 +513,10 @@ def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
 
 def read_single_spectrum(filename, var_name=None, wdim='wn'):
     """
-    Read a single spectrum in SFIT4 output ascii files.
+    Read a single spectrum in a SFIT4 output ascii files.
 
-    a single spectrum stored in one file, e.g., for a given gaz, band, scan
-    and at a given iteration.
+    Read one spectrum that is stored in a single file, i.e.,
+    for a given gas, band, scan and at a given iteration.
 
     Use this function to load 'out.gas_spectra' files.
 
@@ -528,7 +524,7 @@ def read_single_spectrum(filename, var_name=None, wdim='wn'):
     ----------
     filename : str
         Name or path to the file.
-    var_name : str
+    var_name : str or None
         Name chosen for the spectrum variable. If empty, the name is set
         from `filename`. If None (default), the name is defined from the
         spectrum metadata (gas, band, scan and iteration).
@@ -543,18 +539,18 @@ def read_single_spectrum(filename, var_name=None, wdim='wn'):
 
     """
     with open(filename, 'r') as f:
-        global_attrs = {'filename': os.path.abspath(filename)}
+        global_attrs =  {'filename': os.path.abspath(filename)}
 
         header = f.readline().split()
         gas = header[1].strip()
         band_id, scan_id = int(header[3]), int(header[5])
         iteration = int(header[-1])
 
-        attrs = {'gaz': gas, 'band_id': band_id, 'scan_id': scan_id,
+        attrs = {'gas': gas, 'band_id': band_id, 'scan_id': scan_id,
                  'iteration': iteration}
 
         if var_name is None:
-            var_name = "fitted_spectrum__{}__band{}__s{}i{}".format(
+            var_name = "fitted_spectrum__{}__band{}__scan{}__iter{}".format(
                 gas, band_id, scan_id, iteration
             )
         if not var_name:
@@ -567,18 +563,92 @@ def read_single_spectrum(filename, var_name=None, wdim='wn'):
         assert len(wavenumber) == size
         assert len(data) == size
 
-        dataset = {
-            'data_vars': {var_name: (wdim_band, data, attrs)},
-            'coords': {wdim_band: wavenumber},
-            'attrs': global_attrs
-        }
+    dataset = {
+        'data_vars': {var_name: (wdim_band, data, attrs)},
+        'coords': {wdim_band: wavenumber},
+        'attrs': global_attrs
+    }
+
+    return dataset
+
+
+def read_single_spectra(filename, n_scan, n_iter,
+                        wdim='wn', sdim='scan', idim='iteration'):
+    """
+    Read single spectra in a SFIT4 output ascii files.
+
+    Read one or more spectra that are each stored in a single file, i.e.,
+    for a given gas, band, scan and at a given iteration.
+
+    Use this function to load all 'out.gas_spectra' files at once.
+
+    Parameters
+    ----------
+    filename : str
+        Name or path to the file(s). Support UNIX-like file specification
+        (e.g., using '*' to specify all files that match a given pattern).
+    n_scan : int
+        Total number of scans (here given as argument as it isn't stored in
+        'out.gas_spectra' files -- same case for `n_iter` below).
+    n_iter : int
+        Total number of iterations.
+    wdim : str
+        Name of the dimension of the wavenumber (default: 'wn').
+        This is actually the prefix to which the band id will be added.
+    sdim : str
+        Name of the dimension of the scans (default: 'scan').
+    idim : str
+        Name of the dimension of the iterations (default: 'iteration').
+
+    Returns
+    -------
+    dataset : dict
+        A CDM-structured dictionary.
+
+    """
+    global_attrs = {'filename': os.path.abspath(filename)}
+    coords = {
+        # scan and iteration ids both start from 1
+        sdim: np.arange(1, n_scan + 1),
+        idim: np.array(list(range(1, n_iter)) + [-1])
+    }
+    dims = {}
+    data = {}
+
+    for f in glob.glob(filename):
+        d = read_single_spectrum(f, wdim=wdim)
+
+        # add band wavenumber coordinate or assert it is the same
+        # for each gas, scan and iteration
+        ckey, cval = d['coords'].popitem()
+        if ckey not in coords:
+            coords[ckey] = cval
+        else:
+            assert (coords[ckey] == cval).all()
+
+        # create nan array for gas/band if it doesn't exists
+        var_name, (vdim, vdata, vattrs) = d['data_vars'].popitem()
+        new_var_name = "fitted_spectrum__{}__band{}".format(vattrs['gas'],
+                                                            vattrs['band_id'])
+        if new_var_name not in dims.keys():
+            dims[new_var_name] = (idim, sdim, ckey)
+            data[new_var_name] = np.empty((n_iter, n_scan, cval.size)) * np.nan
+
+        # fill array slice
+        data[new_var_name][vattrs['iteration'], vattrs['scan_id'] - 1, :] = vdata
+
+    dataset = {
+        'data_vars': dict([(k, (dims[k], data[k])) for k in data.keys()]),
+        'coords': coords,
+        'attrs': global_attrs
+    }
 
     return dataset
 
 
 def read_solar_spectrum(filename, var_name='', wdim='wn'):
     """
-    Read a calculated solar spectrum in SFIT4 output ascii files.
+    Read a calculated sol ar spectrum in SFIT4 output ascii files.
 
     Use this function to load 'out.solarspectrum'.
 
@@ -593,7 +663,7 @@ def read_solar_spectrum(filename, var_name='', wdim='wn'):
         Name of the dimension of the wavenumber (default: 'wn').
 
     Returns
-    -------
+    ---- ---
     dataset : dict
         A CDM-structured dictionary.
 
@@ -699,131 +769,3 @@ def read_summary(filename):
         outputd.update({k: f(v) for k, f, v in zip(ckeys, cfuncs, cvals)})
 
     return outputd
-
-
-# ---------------------------------------
-# input files
-# ---------------------------------------
-
-REF_GAZ_PATTERN = r"\s*(?P<index>\d+)\s+(?P<name>\w+)\s+(?P<description>.+)"
-
-
-def read_layers(filename):
-    """
-    Read profile layers.
-
-    Use this function to load 'in.stalayers'.
-
-    """
-    with open(filename, 'r') as f:
-        outputd = dict()
-        outputd['header'] = f.readline().strip()
-        n_layers = int(f.readline())
-        dummy = f.readline()
-
-        data = np.loadtxt(f)
-        assert data.shape[0] == n_layers
-        index, lbound, thick, growth, points = data.transpose()
-
-        outputd['index'] = index[:-1].astype('i')
-        outputd['altitude'] = {
-            'points': points[:-1],
-            'lower_bounds': lbound
-        }
-
-    return outputd
-
-
-def read_reference_profiles(filename):
-    """
-    Read coordinates, atmosphere and gas reference profiles.
-
-    Use this function to load 'in.refprofile'.
-
-    """
-    with open(filename, 'r') as f:
-        outputd = dict()
-        order_desc, n_levels, n_gases = map(int, f.readline().split())
-        if order_desc:
-            order = 'descending'
-        else:
-            order = 'ascending'
-
-        # altitude, pressure and temperature profiles
-        for profile in ('altitude', 'pressure', 'temperature'):
-            description = f.readline().strip()
-            data = np.fromfile(f, count=n_levels, sep=" ")
-            outputd[profile] = {
-                'points': data,
-                'attrs': {
-                    'description': description,
-                    'order': order
-                }
-            }
-
-        # gas profiles
-        gases = []
-        for iprofile in range(n_gases):
-            header = re.match(REF_GAZ_PATTERN, f.readline()).groupdict()
-            data = np.fromfile(f, count=n_levels, sep=" ")
-            if header['name'] == 'OTHER':
-                data = np.array([])
-            gas = {
-                'name': '{}_reference_profile'.format(header['name']),
-                'data': data,
-                'attrs': {
-                    'gas': header['name'],
-                    'gas_index': int(header['index']),
-                    'description': header['description'].strip(),
-                    'order': order
-                }
-            }
-            gases.append(gas)
-
-        outputd['gases'] = gases
-
-    return outputd
-
-
-def read_spectrum(filename):
-    """
-    Read a spectrum (bands and scans data).
-
-    Use this function to load 'in.spectrum'.
-
-    """
-    with open(filename, 'r') as f:
-        spectra = []
-
-        while True:
-            line = f.readline()
-            if not line:
-                break
-            sza, earth_radius, lat, lon, snr = map(float, line.split())
-
-            dt_items = list(map(int, re.split('[\s\.]+', f.readline())[:-1]))
-            dt_items[-1] *= 10     # convert decimal seconds to milliseconds
-            dt = datetime.datetime(*dt_items)
-
-            title = f.readline().strip()
-
-            wn_min, wn_max, wn_step, size = map(eval, f.readline().split())
-
-            data = np.fromfile(f, count=size, sep=" ")
-            wavenumber = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
-
-            spectra.append({
-                'data': data,
-                'wavenumber': wavenumber,  # TODO: treat it as a coordinate
-                'attrs': {
-                    'title': title,
-                    'solar_zenith_angle': sza,
-                    'earth_radius': earth_radius,
-                    'latitude': lat,
-                    'longitude': lon,
-                    'snr': snr,
-                    'datetime': dt
-                }
-            })
-
-    return {'spectra': spectra}

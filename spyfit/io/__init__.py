@@ -22,4 +22,4 @@ which follow the Common Data Model (CDM)::
 
 """
 
-from .sfit4ascii import *
+from .sfit4 import *
