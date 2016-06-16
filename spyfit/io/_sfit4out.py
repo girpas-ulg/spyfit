@@ -446,7 +446,7 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
             # fit data: 3-line blocks of 12 values for each observed,
             # fitted and difference spectra.
             # 1st value of 1st line is the wavenumber (ignored, re-calculated)
-            # difference spectra can be easily calculated, it is not returned.
+            # skip difference spectrum as can be easily re-calculated.
             n_vals_line = 12
             labels = ('observed', 'fitted', 'difference')
             slices = [slice(1, None), slice(None), slice(None)]
@@ -471,9 +471,13 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
                   for k, v in coords_data.items()}
         coords[idim] = (idim, np.array([-1]))
 
-        variables = {'spec_{}_ALL'.format(k): ((idim, spdim),
-                                               np.concatenate(v)[np.newaxis, :])
-                     for k, v in spec_data.items()}
+        variables = {
+            'spec_observed': (spdim, np.concatenate(spec_data['observed'])),
+            'spec_fitted_ALL': (
+                (idim, spdim),
+                np.concatenate(spec_data['fitted'])[np.newaxis, :]
+            )
+        }
 
         dataset = {
             'data_vars': variables,
