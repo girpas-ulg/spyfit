@@ -257,12 +257,12 @@ def read_state_vector(filename, ldim='level', pdim='param'):
         # apriori profiles of pressure and temperature
         variables = {}
         for p in ('apriori_pressure', 'apriori_temperature'):
-            dummy = f.readline()
+            _ = f.readline()
             variables[p] = ((ldim,), np.fromfile(f, count=nlevels, sep=" "))
 
         # apriori/retrieved gas profiles (and columns)
         for i in range(int(f.readline())):
-            dummy = f.readline()
+            _ = f.readline()
             gas = f.readline().strip()
             variables['apriori_total_column__' + gas] = (
                 (), float(f.readline())
@@ -271,8 +271,8 @@ def read_state_vector(filename, ldim='level', pdim='param'):
                 (ldim,), np.fromfile(f, count=nlevels, sep=" ")
             )
 
-            dummy = f.readline()
-            dummy = f.readline()
+            _ = f.readline()
+            _ = f.readline()
             variables['retrieved_total_column__' + gas] = (
                 (), float(f.readline())
             )
@@ -362,7 +362,8 @@ def read_param_iterations(filename, vdim='statevector', idim='iteration'):
     return dataset
 
 
-def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
+def read_spectra(filename, spdim='spectrum', idim='iteration',
+                 wcoord='spec_wn', scoord='spec_scan', bcoord='spec_band',
                  parse_sp_header=None):
     """
     Read observed and fitted spectra in SFIT4 ascii files.
@@ -373,13 +374,22 @@ def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
     ----------
     filename : str
         Name or path to the file.
-    wdim : str
-        Name of the dimension of the wavenumber (default: 'wn'). This
-        is actually a prefix to which the band number will be added.
-    bdim : str
-        Name of the dimension of the bands (default: 'band').
-    sdim : str
-        Name of the dimension of the scans (default: 'scan').
+    spdim : str
+        Name of the dimension of the spectral data (default: 'spectra').
+        spectral data for all fitted micro-windows (i.e., bands and scans)
+        will be flattened as a 1-d array.
+    idim : str
+        Name of the iteration dimension (default: 'iteration'). This is not
+        very useful here as 'out.pbpfile' stores spectral data for only the last
+        iteration but this is to be consistent with data returned by
+        the `read_single_spectrum` and `read_single_spectra` functions.
+    wcoord : str
+        Name of the wavenumber coordinate for spectral data
+        (default: 'spec_wn').
+    scoord : str
+        Name of the coordinate for spectral scans (default: 'spec_scan').
+    bcoord : str
+        Name of the coordinate for spectral bands (default: 'spec_band').
     parse_sp_header : callable or None
         A callable wich must accept the header line of a spectrum as input
         and must return a dictionary of extracted metadata that will be added in
@@ -391,11 +401,6 @@ def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
     -------
     datase t : dict
         A CDM-structured dictionary.
-
-    Notes
-    -----
-    To avoid duplicates, micro-window metadata will be added only in the
-    observed spectrum entries and not in the fitted entries.
 
     """
     with open(filename, 'r') as f:
@@ -409,23 +414,19 @@ def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
 
         bands, scans = [], []
         spectrum_header = {}
-        wavenumber = {}
-        sdim_vars = {
-            'spectrum_sza_code': {},
-         }
-        bdim_vars = {
-            'n_retrieved_gas': {}
-        }
-        spectrum_data = {'observed': {}, 'fitted': {}}
+        spec_data = {'observed': [], 'fitted': []}
+        coords_data = {wcoord: [], bcoord: [], scoord: []}
+        data_size = 0
 
         # loop over each individual fitted spectra (n_fits)
         for i in range(n_fits):
 
             # fit header line
-            line = f.readline()
-            iheader = {'spectrum_header': line.strip()}
-            if parse_sp_header is not None:
-                iheader.update(parse_sp_header(line))
+            scan_hdr = f.readline().strip()
+            # TODO: add parsed header elements as separate attrs
+            #iheader = {'spectrum_header': line.strip()}
+            #if parse_sp_header is not None:
+            #    iheader.update(parse_sp_header(line))
 
             # fit metadata line
             line = f.readline()
@@ -438,11 +439,9 @@ def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
             #       whether the band has one or multiple scans
             # TODO: make sure that one spec_code correspond to one scan id
             # TODO: make sure n_ret_gas is the same for all scans in a band
-            spectrum_header[scan_id] = iheader
-            sdim_vars['spectrum_sza_code'][scan_id] = spec_code
-            bdim_vars['n_retrieved_gas'][band_id] = n_ret_gas
-            bands.append(band_id)
-            scans.append(scan_id)
+            data_size += size
+            global_attrs['spectrum_header__scan{}'.format(scan_id)] = scan_hdr
+            global_attrs['n_retrieved_gas__band{}'.format(band_id)] = n_ret_gas
 
             # fit data: 3-line blocks of 12 values for each observed,
             # fitted and difference spectra.
@@ -460,49 +459,21 @@ def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
             for lbl, data in zip(labels, w_data):
                 if lbl == 'difference':
                     continue
-                dkey = '{}_{}'.format(band_id, scan_id)
-                spectrum_data[lbl][dkey] = np.array(data)
+                spec_data[lbl].append(np.array(data))
 
-            if band_id not in wavenumber.keys():
-                wn = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
-                assert wn.size == size
-                wavenumber[band_id] = wn
+            wn = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
+            assert wn.size == size
+            coords_data[wcoord].append(wn)
+            coords_data[bcoord].append(np.repeat(band_id, size))
+            coords_data[scoord].append(np.repeat(scan_id, size))
 
-        # group data and metadata by band and scan
-        unique_bands = sorted(set(bands))
-        unique_scans = sorted(set(scans))
-        coords = {bdim: unique_bands, sdim: unique_scans}
-        for b in unique_bands:
-            wdim_band = '{}__band{}'.format(wdim, b)
-            coords[wdim_band] = wavenumber[b]
+        coords = {k: (spdim, np.concatenate(v))
+                  for k, v in coords_data.items()}
+        coords[idim] = (idim, np.array([-1]))
 
-        variables = {}
-        for k, v in bdim_vars.items():
-            variables[k] = (bdim, [v[b] for b in unique_bands])
-        for k, v in sdim_vars.items():
-            variables[k] = (sdim, [v[s] for s in unique_scans])
-
-        header_variables = {}
-        for s in unique_scans:
-            for k, v in spectrum_header[s].items():
-                if k in header_variables.keys():
-                    header_variables[k].append(v)
-                else:
-                    header_variables[k] = [v]
-        for k, v in header_variables.items():
-            variables[k] = (sdim, v)
-
-        for sptype in ('observed', 'fitted'):
-            for b in unique_bands:
-                dkey = '{}_{}'.format(b, s)
-                vname = '{}_spectrum__band{}'.format(sptype, b)
-                wdim_band = '{}__band{}'.format(wdim, b)
-                data = [spectrum_data[sptype][dkey]
-                        if dkey in spectrum_data[sptype].keys()
-                        else np.ma.array(np.empty_like(wavenumber[b]),
-                                         mask=True)
-                        for s in unique_scans]
-                variables[vname] = ((sdim, wdim_band), np.ma.row_stack(data))
+        variables = {'spec_{}_ALL'.format(k): ((idim, spdim),
+                                               np.concatenate(v)[np.newaxis, :])
+                     for k, v in spec_data.items()}
 
         dataset = {
             'data_vars': variables,
@@ -513,7 +484,23 @@ def read_spectra(filename, wdim='wn', bdim='band', sdim='scan',
     return dataset
 
 
-def read_single_spectrum(filename, var_name=None, wdim='wn'):
+def _read_single_spec(filename):
+    with open(filename, 'r') as f:
+        header = f.readline().split()
+        gas = header[1].strip()
+        band_id, scan_id = int(header[3]), int(header[5])
+        iteration = int(header[-1])
+
+        wn_min, wn_max, wn_step, size = map(eval, f.readline().split())
+        wavenumber = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
+        data = np.loadtxt(f).flatten()
+        assert len(wavenumber) == size
+        assert len(data) == size
+
+    return gas, band_id, scan_id, iteration, wavenumber, data
+
+
+def read_single_spectrum(filename, var_name=None, wdim='spec_wn'):
     """
     Read a single spectrum in a SFIT4 output ascii files.
 
@@ -531,51 +518,45 @@ def read_single_spectrum(filename, var_name=None, wdim='wn'):
         from `filename`. If None (default), the name is defined from the
         spectrum metadata (gas, band, scan and iteration).
     wdim : str
-        Name of the dimension of the wavenumber (default: 'wn').
+        Name of the dimension of the wavenumber (default: 'spec_wn').
         This is actually the prefix to which the band id will be added.
 
     Returns
     -------
-    dataset : dict
+    dataarray : dict
         A CDM-structured dictionary.
 
     """
     with open(filename, 'r') as f:
-        global_attrs =  {'filename': os.path.abspath(filename)}
-
-        header = f.readline().split()
-        gas = header[1].strip()
-        band_id, scan_id = int(header[3]), int(header[5])
-        iteration = int(header[-1])
-
-        attrs = {'gas': gas, 'band_id': band_id, 'scan_id': scan_id,
-                 'iteration': iteration}
+        raw_data = _read_single_spec(filename)
+        gas, band_id, scan_id, iteration, wavenumber, data = raw_data
+        attrs =  {'source': os.path.abspath(filename), 'gas': gas,
+                  'band_id': band_id, 'scan_id': scan_id,
+                  'iteration': iteration}
 
         if var_name is None:
-            var_name = "fitted_spectrum__{}__band{}__scan{}__iter{}".format(
+            var_name = "spec_fitted__{}__band{}__scan{}__iter{}".format(
                 gas, band_id, scan_id, iteration
             )
         if not var_name:
             var_name = sanatize_name(os.path.basename(filename))
 
-        wn_min, wn_max, wn_step, size = map(eval, f.readline().split())
-        wavenumber = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
         wdim_band = '{}__band{}'.format(wdim, band_id)
-        data = np.loadtxt(f).flatten()
-        assert len(wavenumber) == size
-        assert len(data) == size
 
-    dataset = {
-        'data_vars': {var_name: (wdim_band, data, attrs)},
+    dataarray = {
+        'data': data,
         'coords': {wdim_band: wavenumber},
-        'attrs': global_attrs
+        'dims': (wdim_band,),
+        'name': var_name,
+        'attrs': attrs
     }
 
-    return dataset
+    return dataarray
 
 
-def read_single_spectra(filename, n_scan, n_iter,
-                        wdim='wn', sdim='scan', idim='iteration'):
+def read_single_spectra(filename, spdim='spectrum', idim='iteration',
+                        wcoord='spec_wn', scoord='spec_scan',
+                        bcoord='spec_band'):
     """
     Read single spectra in a SFIT4 output ascii files.
 
@@ -589,64 +570,79 @@ def read_single_spectra(filename, n_scan, n_iter,
     filename : str
         Name or path to the file(s). Support UNIX-like file specification
         (e.g., using '*' to specify all files that match a given pattern).
-    n_scan : int
-        Total number of scans.
-    n_iter : int
-        Total number of iterations.
-    wdim : str
-        Name of the dimension of the wavenumber (default: 'wn').
-        This is actually the prefix to which the band id will be added.
-    sdim : str
-        Name of the dimension of the scans (default: 'scan').
+    spdim : str
+        Name of the dimension of the spectral data (default: 'spectrum').
+        spectral data or coordinates for all fitted micro-windows
+        (i.e., bands and scans) will be flattened as a 1-d array.
     idim : str
         Name of the dimension of the iterations (default: 'iteration').
+    wcoord : str
+        Name of the wavenumber coordinate for spectral data
+        (default: 'spec_wn').
+    scoord : str
+        Name of the coordinate for spectral scans (default: 'spec_scan').
+    bcoord : str
+        Name of the coordinate for spectral bands (default: 'spec_band').
 
     Returns
     -------
     dataset : dict
         A CDM-structured dictionary.
 
-    Notes
-    -----
-    `n_scan` and `n_iter` must be provided manually as it isn't stored in
-    'out.gas_spectra' files, and it is needed to build a n-dimensional array
-    for each gas (dimensions are scan and iteration), possibly/partially filled
-    with nan values.
-
     """
-    global_attrs = {'filename': os.path.abspath(filename)}
-    coords = {
-        # scan and iteration ids both start from 1
-        sdim: np.arange(1, n_scan + 1),
-        idim: np.array(list(range(1, n_iter)) + [-1])
-    }
-    dims = {}
-    data = {}
+    global_attrs = {'source': os.path.abspath(filename)}
 
-    for f in glob.glob(filename):
-        d = read_single_spectrum(f, wdim=wdim)
+    file_data = (_read_single_spec(f) for f in glob.glob(filename))
+    fgas, fband, fscan, fiteration, fwn, fdata = zip(*file_data)
 
-        # add band wavenumber coordinate or assert it is the same
-        # for each gas, scan and iteration
-        ckey, cval = d['coords'].popitem()
-        if ckey not in coords:
-            coords[ckey] = cval
-        else:
-            assert (coords[ckey] == cval).all()
+    aa = lambda v: np.asarray(v)
+    fiteration, fband, fscan = aa(fiteration), aa(fband), aa(fscan)
+    fgas, fwn, fdata = aa(fgas), aa(fwn), aa(fdata)
 
-        # create nan array for gas/band if it doesn't exists
-        var_name, (vdim, vdata, vattrs) = d['data_vars'].popitem()
-        new_var_name = "fitted_spectrum__{}__band{}".format(vattrs['gas'],
-                                                            vattrs['band_id'])
-        if new_var_name not in dims.keys():
-            dims[new_var_name] = (idim, sdim, ckey)
-            data[new_var_name] = np.empty((n_iter, n_scan, cval.size)) * np.nan
+    ua = lambda a: np.unique(a)
+    ugas, uscan, uband = ua(fgas), ua(fscan), ua(fband)
+    uiteration = ua(fiteration)
+    if -1 in uiteration:
+        # -1 is the last iteration
+        uiteration = np.roll(uiteration, -1)
 
-        # fill array slice
-        data[new_var_name][vattrs['iteration'], vattrs['scan_id'] - 1, :] = vdata
+    def _get_loc(g, i, s, b):
+        loc = ((fgas == g) & (fiteration == i)
+               & (fscan == s) & (fband == b)).nonzero()[0]
+        if loc.size == 1:
+            return loc[0]
+        elif loc.size > 1:
+            raise ValueError('Duplicate file found for spectrum '
+                             '{} (iteration: {}, scan: {}, band: {})'
+                             .format(g, i, s, b))
+        return loc
+
+    _get_loc_0 = lambda s, b: _get_loc(ugas[0], uiteration[0], s, b)
+
+    def _get_flat_sorted(data, g, i):
+        return np.concatenate([data[_get_loc(g, i, s, b)]
+                               for s in uscan for b in uband])
+
+    spec_data = {}
+    for g in ugas:
+        spec_data[g] = np.vstack([_get_flat_sorted(fdata, g, i)]
+                                 for i in uiteration)
+
+    wavenumber = _get_flat_sorted(fwn, ugas[0], uiteration[0])
+    scan = np.concatenate([np.repeat(s, fdata[_get_loc_0(s, b)].size)
+                           for s in uscan for b in uband])
+    band = np.concatenate([np.repeat(b, fdata[_get_loc_0(s, b)].size)
+                           for s in uscan for b in uband])
+
+    coords = {wcoord: (spdim, wavenumber),
+              scoord: (spdim, scan),
+              bcoord: (spdim, band),
+              idim: uiteration}
+    variables = {'spec_fitted__{}'.format(k): ((idim, spdim), v)
+                 for k, v in spec_data.items()}
 
     dataset = {
-        'data_vars': dict([(k, (dims[k], data[k])) for k in data.keys()]),
+        'data_vars': variables,
         'coords': coords,
         'attrs': global_attrs
     }
@@ -654,7 +650,7 @@ def read_single_spectra(filename, n_scan, n_iter,
     return dataset
 
 
-def read_solar_spectrum(filename, var_name='', wdim='wn'):
+def read_solar_spectrum(filename, var_name='', wdim='spec_wn_solar'):
     """
     Read a calculated sol ar spectrum in SFIT4 output ascii files.
 
@@ -668,7 +664,7 @@ def read_solar_spectrum(filename, var_name='', wdim='wn'):
         Name chosen for the spectrum variable. If empty (default),
         the name is set from `filename`.
     wdim : str
-        Name of the dimension of the wavenumber (default: 'wn').
+        Name of the dimension of the wavenumber (default: 'spec_wn_solar').
 
     Returns
     -------
@@ -700,7 +696,9 @@ def read_solar_spectrum(filename, var_name='', wdim='wn'):
     return dataset
 
 
-def read_summary(filename, wdim='wn', bdim='band', sdim='scan'):
+def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
+                 scoord='spec_scan', bcoord='spec_band',
+                 bdim='band', sdim='scan'):
     """
     Read retrieval summary in SFIT4 output ascii files.
 
@@ -710,9 +708,17 @@ def read_summary(filename, wdim='wn', bdim='band', sdim='scan'):
     ----------
     filename : str
         Name or path to the file.
-    wdim : str
-        Name of the dimension of the wavenumber (default: 'wn'). This
-        is actually a prefix to which the band number will be added.
+    spdim : str
+        Name of the dimension of the spectral data (default: 'spectrum').
+        spectral data or coordinates for all fitted micro-windows
+        (i.e., bands and scans) will be flattened as a 1-d array.
+    wcoord : str
+        Name of the wavenumber coordinate for spectral data
+        (default: 'spec_wn').
+    scoord : str
+        Name of the coordinate for spectral scans (default: 'spec_scan').
+    bcoord : str
+        Name of the coordinate for spectral bands (default: 'spec_band').
     bdim : str
         Name of the dimension of the bands (default: 'band').
     sdim : str
@@ -733,7 +739,7 @@ def read_summary(filename, wdim='wn', bdim='band', sdim='scan'):
         coords = {}
 
         # spectrum headers (assume same header for every band)
-        dummy = f.readline()
+        _ = f.readline()
         spec_headers = []
         for i in range(int(f.readline())):
             header = f.readline().strip()
@@ -741,9 +747,9 @@ def read_summary(filename, wdim='wn', bdim='band', sdim='scan'):
                 spec_headers.append(header)
 
         # retrieved gases
-        dummy = f.readline()
+        _ = f.readline()
         n_gases = int(f.readline())
-        dummy = f.readline()
+        _ = f.readline()
         for i in range(n_gases):
             cvals = [s.strip() for s in f.readline().split()]
             index, name = int(cvals[0]), cvals[1]
@@ -754,7 +760,7 @@ def read_summary(filename, wdim='wn', bdim='band', sdim='scan'):
             variables['retrieved_total_column__' + name] = ((), rtcol, attrs)
 
         # bands and scans
-        dummy = f.readline()
+        _ = f.readline()
         icfuncs = [int, float, float, float, int, float, float, float, int]
         jcfuncs = [int, float, float]
         # TODO: rename 'fovdia' and 'pmax', what is it?
@@ -763,7 +769,7 @@ def read_summary(filename, wdim='wn', bdim='band', sdim='scan'):
         jckeys = ['index', 'initial_snr', 'calculated_snr']
         bands = []
         n_bands = int(f.readline())
-        dummy = f.readline()
+        _ = f.readline()
         for i in range(n_bands):
             icvals = [s.strip() for s in f.readline().split()]
             d = {k: f(v) for k, f, v in zip(ickeys, icfuncs, icvals[:-1])}
@@ -776,20 +782,35 @@ def read_summary(filename, wdim='wn', bdim='band', sdim='scan'):
             d['scans'] = scans
             bands.append(d)
 
+        wn = [None] * (len(bands) + 1)
         for b in bands:
-            wavenumber = np.arange(
-                b['wn_start'], b['wn_end'] + b['wn_step'] / 2., b['wn_step']
-            )
-            wdim_band = '{}__band{}'.format(wdim, b['index'])
-            coords[wdim_band] = wavenumber
+            wn[b['index']] = np.arange(b['wn_start'],
+                                       b['wn_end'] + b['wn_step'] / 2.,
+                                       b['wn_step'])
 
-        coords[bdim] = np.array([b['index'] for b in bands])
+        coords[sdim] = np.unique([s['index']
+                                  for b in bands for s in b['scans']])
+        coords[bdim] = np.unique([b['index'] for b in bands])
+
+        wavenumber = []
+        scan = []
+        band = []
+        for s in coords[sdim]:
+            for b in coords[bdim]:
+                band_scans = bands[b - 1]['scans']
+                if s not in [v['index'] for v in band_scans]:
+                    continue
+                wavenumber.append(wn[b])
+                scan.append(np.repeat(s, wn[b].size))
+                band.append(np.repeat(b, wn[b].size))
+
+        coords[wcoord] = (spdim, np.concatenate(wavenumber))
+        coords[scoord] = (spdim, np.concatenate(scan))
+        coords[bcoord] = (spdim, np.concatenate(band))
+
         for vname in ('fovdia', 'pmax'):
             variables[vname] = (bdim, np.array([b[vname] for b in bands]))
 
-        coords[sdim] = np.array(sorted(
-            set([s['index'] for b in bands for s in b['scans']])
-        ))
         for vname in ('initial_snr', 'calculated_snr'):
             data = np.empty((coords[bdim].size, coords[sdim].size)) * np.nan
             for b in bands:
@@ -798,7 +819,7 @@ def read_summary(filename, wdim='wn', bdim='band', sdim='scan'):
             variables[vname] = ((bdim, sdim), data)
 
         # other returned values
-        dummy = f.readline()
+        _ = f.readline()
         s2bool_func = lambda s: True if s.strip() == 'T' else False
         cfuncs = [lambda s: float(s) / 100, float, float, float, float,
                   int, int, s2bool_func, s2bool_func]
@@ -806,7 +827,7 @@ def read_summary(filename, wdim='wn', bdim='band', sdim='scan'):
         ckeys = ['fit_rms', 'chi_square_obs', 'dofs_total',
                  'dofs_trg', 'dofs_tpr', 'n_iterations', 'n_iterations_max',
                  'has_converged', 'has_division_warnings']
-        dummy = f.readline()
+        _ = f.readline()
         cvals = [s.strip() for s in f.readline().split()]
         misc_vals = {k: f(v) for k, f, v in zip(ckeys, cfuncs, cvals)}
         for i in range(0, 5):
