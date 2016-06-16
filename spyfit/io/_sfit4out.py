@@ -816,7 +816,7 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
             variables[vname] = (bdim, np.array([b[vname] for b in bands]))
 
         for vname in ('initial_snr', 'calculated_snr'):
-            data = np.empty((coords[bdim].size, coords[sdim].size)) * np.nan
+            data = np.full((coords[bdim].size, coords[sdim].size), np.nan)
             for b in bands:
                 for s in b['scans']:
                     data[b['index'] - 1, s['index'] - 1] = s[vname]
