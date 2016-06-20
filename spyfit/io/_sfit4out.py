@@ -440,7 +440,7 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
             # TODO: make sure that one spec_code correspond to one scan id
             # TODO: make sure n_ret_gas is the same for all scans in a band
             data_size += size
-            global_attrs['spectrum_header__scan{}'.format(scan_id)] = scan_hdr
+            global_attrs['spec_header__scan{}'.format(scan_id)] = scan_hdr
             global_attrs['n_retrieved_gas__band{}'.format(band_id)] = n_ret_gas
 
             # fit data: 3-line blocks of 12 values for each observed,
@@ -767,10 +767,9 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         _ = f.readline()
         icfuncs = [int, float, float, float, int, float, float, float, int]
         jcfuncs = [int, float, float]
-        # TODO: rename 'fovdia' and 'pmax', what is it?
         ickeys = ['index', 'wn_start', 'wn_end', 'wn_step',
-                  'n_points', 'pmax', 'fovdia']
-        jckeys = ['index', 'initial_snr', 'calculated_snr']
+                  'n_points', 'spec_opd_max', 'spec_fov']
+        jckeys = ['index', 'spec_initial_snr', 'spec_calculated_snr']
         bands = []
         n_bands = int(f.readline())
         _ = f.readline()
@@ -812,10 +811,10 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         coords[scoord] = (spdim, np.concatenate(scan))
         coords[bcoord] = (spdim, np.concatenate(band))
 
-        for vname in ('fovdia', 'pmax'):
+        for vname in ('spec_fov', 'spec_opd_max'):
             variables[vname] = (bdim, np.array([b[vname] for b in bands]))
 
-        for vname in ('initial_snr', 'calculated_snr'):
+        for vname in ('spec_initial_snr', 'spec_calculated_snr'):
             data = np.full((coords[bdim].size, coords[sdim].size), np.nan)
             for b in bands:
                 for s in b['scans']:
