@@ -14,7 +14,7 @@ from itertools import groupby
 import numpy as np
 
 
-__all__ = ['read_layers', 'read_ref_profiles', 'read_spectrum']
+__all__ = ['read_layers', 'read_ref_profiles', 'read_spectrum', 'read_ctl']
 
 
 REF_GAZ_PATTERN = r"\s*(?P<index>\d+)\s+(?P<name>\w+)\s+(?P<description>.+)"
@@ -190,32 +190,40 @@ def read_spectrum(filename, spdim='spectrum', bdim='band', sdim='scan',
 
     # no band or scan id information given here.
     # assume micro windows order in file = for s in scans for b in bands
-    # and assume bands and scans are sorted by id.
+    # and assume bands and scans are sorted by id in ascending order.
+    # scan and band ids begin at 1.
     # flatten scans and bands as 1-d spectral data.
     n_scan, n_band = 1, 1
-    i_scan, i_band = 1, 1
+    i_scan, i_band = 0, 0
     prev_datetime = None
     spec_data, wavenumber, scan, band, snr_ind_vals = [], [], [], [], []
+    spec_sza, spec_radius, spec_lat, spec_lon, spec_dt = [], [], [], [], []
 
     for mw in mwindows:
-        if (i_band > 1 or i_scan > 1) and mw['datetime'] != prev_datetime:
+        if mw['datetime'] != prev_datetime:
             # new scan
             i_scan += 1
             n_band = max([n_band, i_band - 1])
             i_band = 1
-        snr_ind_vals.append(((i_band, i_scan), mw['initial_snr']))
+            global_attrs['spec_header__scan{}'.format(i_scan)] = mw['title']
+            spec_sza.append(mw['solar_zenith_angle'])
+            spec_radius.append(mw['earth_radius'])
+            spec_lat.append(mw['latitude'])
+            spec_lon.append(mw['longitude'])
+            spec_dt.append(mw['datetime'])
+        snr_ind_vals.append(((i_band - 1, i_scan - 1), mw['initial_snr']))
         spec_data.append(mw['data'])
         wavenumber.append(mw['wavenumber'])
         band.append(np.repeat(i_band, mw['data'].size))
         scan.append(np.repeat(i_scan, mw['data'].size))
         i_band += 1
         prev_datetime = mw['datetime']
-    n_scan = i_scan
     n_band = max([n_band, i_band - 1])
+    n_scan = i_scan
 
     initial_snr = np.full((n_band, n_scan), np.nan)
     for (i, j), v in snr_ind_vals:
-        initial_snr[i - 1][j - 1] = v
+        initial_snr[i][j] = v
 
     coords = {
         wcoord: (spdim, np.concatenate(wavenumber)),
@@ -226,12 +234,85 @@ def read_spectrum(filename, spdim='spectrum', bdim='band', sdim='scan',
     }
     data_vars = {
         'spec_observed': (spdim, np.concatenate(spec_data)),
-        'initial_snr': ((bdim, sdim), initial_snr)
+        'spec_initial_snr': ((bdim, sdim), initial_snr),
+        'spec_datetime': (sdim, np.asarray(spec_dt)),
+        'spec_sza': (sdim, np.asarray(spec_sza)),
+        'spec_earth_radius': (sdim, np.asarray(spec_radius)),
+        'spec_latitude': (sdim, np.asarray(spec_lat)),
+        'spec_longitude': (sdim, np.asarray(spec_lon))
     }
 
     dataset = {
         'coords': coords,
         'data_vars': data_vars,
+        'attrs': global_attrs
+    }
+
+    return dataset
+
+
+def read_ctl(filename, ldim='level'):
+    """
+    Read profile layers.
+
+    Use this function to load 'sfit4.ctl'.
+
+    Parameters
+    ----------
+    filename : str
+        Name or path to the file.
+    ldim : str
+        Name of the dimension of the profiles (default: 'level').
+
+    Returns
+    -------
+    dataset : dict
+        A CDM-structured dictionary.
+
+    """
+    global_attrs = {'source': os.path.abspath(filename)}
+    variables = {}
+
+    def sanatize_var_name(name):
+        return name.replace('.', '__').strip()
+
+    def eval_value(value):
+        try:
+            return eval(value)
+        except Exception:
+            v = value.strip()
+            if v == 'T':
+                return True
+            elif v == 'F':
+                return False
+            return v
+
+    with open(filename, 'r') as f:
+        while True:
+            line = f.readline()
+            if not line:
+                break
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            name, val = line.split('=')
+            name = sanatize_var_name(name)
+            if 'profile' in name and 'sigma' in name:
+                # sigma profile
+                # assume that 'gas.layers' is already parsed
+                if not val.strip():
+                    val = np.fromfile(f, count=global_attrs['gas__layers'],
+                                      sep=" ")
+                else:
+                    val = np.fromstring(val, count=global_attrs['gas__layers'],
+                                      sep=" ")
+                variables[name] = (ldim, val)
+            else:
+                 val = eval_value(val)
+                 global_attrs[name] = val
+
+    dataset = {
+        'data_vars': variables,
         'attrs': global_attrs
     }
 
