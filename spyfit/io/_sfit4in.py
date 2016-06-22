@@ -215,6 +215,7 @@ def read_spectrum(filename, spdim='spectrum', bdim='band', sdim='scan',
     prev_datetime = None
     spec_data, wavenumber, scan, band, snr_ind_vals = [], [], [], [], []
     spec_sza, spec_radius, spec_lat, spec_lon, spec_dt = [], [], [], [], []
+    spec_attrs = {}
 
     for mw in mwindows:
         if mw['datetime'] != prev_datetime:
@@ -222,7 +223,7 @@ def read_spectrum(filename, spdim='spectrum', bdim='band', sdim='scan',
             i_scan += 1
             n_band = max([n_band, i_band - 1])
             i_band = 1
-            global_attrs['spec_header__scan{}'.format(i_scan)] = mw['title']
+            spec_attrs['spec_header__scan{}'.format(i_scan)] = mw['title']
             spec_sza.append(mw['solar_zenith_angle'])
             spec_radius.append(mw['earth_radius'])
             spec_lat.append(mw['latitude'])
@@ -250,7 +251,7 @@ def read_spectrum(filename, spdim='spectrum', bdim='band', sdim='scan',
         sdim: np.arange(1, n_scan + 1)
     }
     data_vars = {
-        'spec_observed': (spdim, np.concatenate(spec_data)),
+        'spec_observed': (spdim, np.concatenate(spec_data), spec_attrs),
         'spec_snr_initial': ((bdim, sdim), initial_snr),
         'spec_datetime': (sdim, np.asarray(spec_dt)),
         'spec_sza': (sdim, np.asarray(spec_sza)),

@@ -293,6 +293,9 @@ def read_state_vector(filename, ldim='level', pdim='param'):
         A CDM-structured dictionary.
 
     """
+    variables = {}
+    coords = {}
+
     with open(filename, 'r') as f:
         header = parse_header(f.readline())
         global_attrs = header
@@ -303,19 +306,19 @@ def read_state_vector(filename, ldim='level', pdim='param'):
         is_temp, has_converged, has_divwarn = list(map(
             lambda s: True if s == "T" else False, meta[3:]
         ))
-        global_attrs['n_iteration'] = niter
-        global_attrs['n_iteration_max'] = nitermax
-        global_attrs['is_temp'] = is_temp   # TODO: refactor ! what is 'istemp'?
-        global_attrs['has_converged'] = has_converged
-        global_attrs['has_division_warnings'] = has_divwarn
+        attrs = {'n_iteration': niter,
+                 'n_iteration_max': nitermax,
+                 'is_temp': is_temp,   # TODO: refactor ! what is 'istemp'?
+                 'has_converged': has_converged,
+                 'has_division_warnings': has_divwarn}
+        variables['sfit4_summary'] = ((), np.nan, attrs)
 
         # altitude is a coordinate
-        coords = {}
-        dummy = f.readline()
-        coords['altitude'] = ((ldim,), np.fromfile(f, count=nlevels, sep=" "))
+        _ = f.readline()
+        variables['station_altitude'] = ((ldim,),
+                                         np.fromfile(f, count=nlevels, sep=" "))
 
         # apriori profiles of pressure and temperature
-        variables = {}
         for p in ('apriori_pressure', 'apriori_temperature'):
             _ = f.readline()
             variables[p] = ((ldim,), np.fromfile(f, count=nlevels, sep=" "))
@@ -476,6 +479,7 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
         spectrum_header = {}
         spec_data = {'observed': [], 'fitted': []}
         coords_data = {wcoord: [], bcoord: [], scoord: []}
+        spec_attrs = {}
         data_size = 0
 
         # loop over each individual fitted spectra (n_fits)
@@ -500,8 +504,8 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
             # TODO: make sure that one spec_code correspond to one scan id
             # TODO: make sure n_ret_gas is the same for all scans in a band
             data_size += size
-            global_attrs['spec_header__scan{}'.format(scan_id)] = scan_hdr
-            global_attrs['n_retrieved_gas__band{}'.format(band_id)] = n_ret_gas
+            spec_attrs['spec_header__scan{}'.format(scan_id)] = scan_hdr
+            spec_attrs['n_retrieved_gas__band{}'.format(band_id)] = n_ret_gas
 
             # fit data: 3-line blocks of 12 values for each observed,
             # fitted and difference spectra.
@@ -532,8 +536,9 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
         coords[idim] = (idim, np.array([-1]))
 
         variables = {
-            'spec_observed': (spdim, np.concatenate(spec_data['observed'])),
-            'spec_fitted_ALL': (
+            'spec_observed': (spdim, np.concatenate(spec_data['observed']),
+                              spec_attrs),
+            'spec_fitted__ALL': (
                 (idim, spdim),
                 np.concatenate(spec_data['fitted'])[np.newaxis, :]
             )
@@ -886,17 +891,14 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         s2bool_func = lambda s: True if s.strip() == 'T' else False
         cfuncs = [lambda s: float(s) / 100, float, float, float, float,
                   int, int, s2bool_func, s2bool_func]
-        # TODO: check variable names
+        # TODO: check names
         ckeys = ['fit_rms', 'chi_square_obs', 'dofs_total',
-                 'dofs_trg', 'dofs_tpr', 'n_iterations', 'n_iterations_max',
+                 'dofs_trg', 'dofs_tpr', 'n_iteration', 'n_iteration_max',
                  'has_converged', 'has_division_warnings']
         _ = f.readline()
         cvals = [s.strip() for s in f.readline().split()]
-        misc_vals = {k: f(v) for k, f, v in zip(ckeys, cfuncs, cvals)}
-        for i in range(0, 5):
-            variables[ckeys[i]] = ((), misc_vals[ckeys[i]])
-        for i in range(5, len(ckeys)):
-            global_attrs[ckeys[i]] = misc_vals[ckeys[i]]
+        attrs = {k: f(v) for k, f, v in zip(ckeys, cfuncs, cvals)}
+        variables['sfit4_summary'] = ((), np.nan, attrs)
 
     dataset = {
         'data_vars': variables,

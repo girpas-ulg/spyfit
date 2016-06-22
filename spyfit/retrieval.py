@@ -1,56 +1,42 @@
 # -*- coding: utf-8 -*-
 
-"""Load/Save retrieval data from/into `xray` datasets.
+"""Load/Save retrieval data from/into `xarray` datasets.
 
 It allows to easily handle, concatenate and plot retrieval data from
 different sources (e.g., SFIT4 IO ascii files, netCDF or HDF4 GEOMS files)
-using the data model and high-level API functions implemented in `xray`
-(https://github.com/xray/xray).
+using the data model and high-level API functions implemented in `xarray`
+(https://github.com/pydata/xarray).
 
 """
 
-import xray
+import xarray as xr
+
+from .io.sfit4 import load_sfit4_rundir
 
 
-def open_retrieval(path):
+def load_dataset(filename_or_path, fmt='netcdf'):
     """
-    Load retrieval data as a `xray.Dataset` object.
+    Load a retrieval dataset stored in a given format.
 
     Parameters
     ----------
-    path : str
-        Either path to a netCDF file of previously exported
-        (or concatenated) retrieval data or path to a directory
-        containing all the input/output files of a single SFIT4 run.
+    filename_or_path : str or sequence
+        name or path to the file or directory. Multiple file name(s) or
+        directorie(s) can be given (not yet implemented).
+    fmt : {'netcdf', 'sfit4_rundir', 'geoms'}
+        supported formats are netcdf (default) and sfit4 run directory
+        of input/output ascii files. GEOMS format is not yet implemented.
 
     Returns
     -------
-    dataset : `xray.Dataset` object
-        The loaded dataset.
+    `xarray.Dataset`
+        if multiple filenames or paths are given, it will try to
+        merge the data into a single `xarray.Dataset`.
 
     """
-    pass   # Not yet implemented
-
-
-def open_mfretrieval(paths):
-    """
-    Load and concatenate retrieval data from multiple SFIT4 runs.
-
-    The data of each run must have been already exported to netCDF files.
-    The data is concatenated over a new 'time' dimension, so each single run
-    must be compatible (i.e., using the same bands, retrieved gases and
-    parameters, etc) and can't overlap in time..
-
-    Parameters
-    ----------
-    paths : str or sequence
-        Either a string glob in the form “path/to/my/files/*.nc” or an
-        explicit list of netCDF files to open.
-
-    Returns
-    -------
-    dataset : :class:`xray.Dataset` object
-        The loaded and concatenated dataset.
-
-    """
-    pass   # Not yet implemented
+    if fmt == 'netcdf':
+        return xr.open_dataset(filename_or_path)
+    elif fmt == 'sfit4_rundir':
+        return load_sfit4_rundir(filename_or_path)
+    else:
+        raise ValueError("Unrecognized format '{}'".format(fmt))
