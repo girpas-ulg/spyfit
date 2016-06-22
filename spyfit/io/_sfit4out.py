@@ -11,7 +11,8 @@ import glob
 import numpy as np
 
 
-__all__ = ['read_matrix', 'read_table', 'read_profiles',
+__all__ = ['read_matrix', 'read_ak_matrix', 'read_seinv_vector',
+           'read_table', 'read_profiles', 'read_aprfs', 'read_rprfs',
            'read_state_vector', 'read_param_iterations',
            'read_spectra', 'read_single_spectrum', 'read_single_spectra',
            'read_solar_spectrum', 'read_summary']
@@ -72,8 +73,7 @@ def read_matrix(filename, var_name='', dims=''):
         global_attrs = header
 
         data_shape = tuple([int(d) for d in f.readline().split() if int(d) > 1])
-        data = np.loadtxt(f)
-        assert data.shape == data_shape
+        data = np.fromfile(f, sep=" ").reshape(data_shape)
 
         if not len(dims):
             dims = ('x', 'y')[:data.ndim]
@@ -88,7 +88,34 @@ def read_matrix(filename, var_name='', dims=''):
     return dataset
 
 
-def read_table(filename, var_name='', dims=()):
+def read_ak_matrix(filename, ldim='level', kdim='kernel'):
+    """Read averaging kernel matrix.
+
+    Use this function to load 'out.ak_matrix'.
+
+    See Also
+    --------
+    `read_matrix`
+
+    """
+    return read_matrix(filename, var_name='averaging_kernels',
+                       dims=(kdim, ldim))
+
+
+def read_seinv_vector(filename, ddim='diag'):
+    """Read seinv.
+
+    Use this function to load 'out.seinv_vector'.
+
+    See Also
+    --------
+    `read_matrix`
+
+    """
+    return read_matrix(filename, var_name='seinv', dims=ddim)
+
+
+def read_table(filename, var_name='', dims=(), index_cols=True):
     """
     Read (labeled) tabular data in SFIT4 output ascii files.
 
@@ -125,15 +152,18 @@ def read_table(filename, var_name='', dims=()):
         global_attrs = header
 
         nrows, ncols = [int(n) for n in f.readline().split()[:2]]
-        col_names = [c.strip() for c in f.readline().split()]
-        coords = {dims[1]: col_names}
+        index = [c.strip() for c in f.readline().split()]
 
         data = np.loadtxt(f)
         assert data.shape == (nrows, ncols)
 
-        if len(col_names) != ncols:
-            assert len(col_names) == nrows
-            data = data.transpose()
+        if index_cols:
+            assert len(index) == ncols
+            coord_name = dims[1]
+        else:
+            assert len(index) == nrows
+            coord_name = dims[0]
+        coords = {coord_name: index}
 
         dataset = {
             'data_vars': {
@@ -207,6 +237,36 @@ def read_profiles(filename, var_name_prefix='', ldim='level', ret_gases=False):
         }
 
     return dataset
+
+
+def read_aprfs(filename, ldim='level'):
+    """
+    Read a-priori profiles in SFIT4 output ascii files.
+
+    Use this function to load 'out.aprprofiles'.
+
+    See Also
+    --------
+    `read_profiles`
+
+    """
+    return read_profiles(filename, ldim=ldim, var_name_prefix='apriori_',
+                         ret_gases=False)
+
+
+def read_rprfs(filename, ldim='level'):
+    """
+    Read retrieved profiles in SFIT4 output ascii files.
+
+    Use this function to load 'out.aprprofiles'.
+
+    See Also
+    --------
+    `read_profiles`
+
+    """
+    return read_profiles(filename, ldim=ldim, var_name_prefix='retrieved_',
+                         ret_gases=True)
 
 
 def read_state_vector(filename, ldim='level', pdim='param'):
@@ -769,7 +829,7 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         jcfuncs = [int, float, float]
         ickeys = ['index', 'wn_start', 'wn_end', 'wn_step',
                   'n_points', 'spec_opd_max', 'spec_fov']
-        jckeys = ['index', 'spec_initial_snr', 'spec_calculated_snr']
+        jckeys = ['index', 'spec_snr_initial', 'spec_snr_calculated']
         bands = []
         n_bands = int(f.readline())
         _ = f.readline()
@@ -814,7 +874,7 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         for vname in ('spec_fov', 'spec_opd_max'):
             variables[vname] = (bdim, np.array([b[vname] for b in bands]))
 
-        for vname in ('spec_initial_snr', 'spec_calculated_snr'):
+        for vname in ('spec_snr_initial', 'spec_snr_calculated'):
             data = np.full((coords[bdim].size, coords[sdim].size), np.nan)
             for b in bands:
                 for s in b['scans']:

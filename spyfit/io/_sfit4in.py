@@ -9,7 +9,7 @@ import datetime
 import re
 import os
 import math
-from itertools import groupby
+from collections import OrderedDict
 
 import numpy as np
 
@@ -17,7 +17,7 @@ import numpy as np
 __all__ = ['read_layers', 'read_ref_profiles', 'read_spectrum', 'read_ctl']
 
 
-REF_GAZ_PATTERN = r"\s*(?P<index>\d+)\s+(?P<name>\w+)\s+(?P<description>.+)"
+REF_GAZ_PATTERN = r"\s*(?P<index>\d+)\s+(?P<name>\w+)\s+(?P<description>.*)"
 
 
 def read_layers(filename, ldim='level'):
@@ -52,7 +52,8 @@ def read_layers(filename, ldim='level'):
         index, lbound, thick, growth, points = data.transpose()
 
         coords = {
-            ldim: (ldim, index[:-1].astype('i')),
+            # start level at 1
+            #ldim: (ldim, index[:-1].astype('i')),
         }
         variables = {
             'station_altitude': (ldim, points[:-1], attrs),
@@ -85,6 +86,19 @@ def read_ref_profiles(filename, rdim='rlevel'):
     """
     global_attrs = {'source': os.path.abspath(filename)}
 
+    def get_data(f, count):
+        # separators can be space or comma
+        current_position = f.tell()
+        data = np.fromfile(f, count=count, sep=" ")
+        if data.size != count:
+            f.seek(current_position)
+            data = np.fromfile(f, count=count, sep=",")
+            current_position = f.tell()
+            if f.read(1) != '\n':
+                # no trailing comma
+                f.seek(current_position)
+        return data
+
     with open(filename, 'r') as f:
         order_desc, n_levels, n_gases = map(int, f.readline().split())
         if order_desc:
@@ -97,7 +111,7 @@ def read_ref_profiles(filename, rdim='rlevel'):
         # altitude, pressure and temperature profiles
         for profile in ('altitude', 'pressure', 'temperature'):
             description = f.readline().strip()
-            data = np.fromfile(f, count=n_levels, sep=" ")
+            data = get_data(f, n_levels)
             attrs = {'description': description,
                      'order': order}
             data_vars['reference__' + profile] = (rdim, data, attrs)
@@ -105,7 +119,7 @@ def read_ref_profiles(filename, rdim='rlevel'):
         # gas profiles
         for iprofile in range(n_gases):
             header = re.match(REF_GAZ_PATTERN, f.readline()).groupdict()
-            data = np.fromfile(f, count=n_levels, sep=" ")
+            data = get_data(f, n_levels)
             if header['name'] == 'OTHER':
                 continue     # ignore unused gas indexes
             attrs = {
@@ -164,16 +178,19 @@ def read_spectrum(filename, spdim='spectrum', bdim='band', sdim='scan',
                 break
             sza, earth_radius, lat, lon, snr = map(float, line.split())
 
-            dt_items = list(map(int, re.split('[\s\.]+', f.readline())[:-1]))
+            line = f.readline().strip()
+            dt_items = list(map(int, re.split('[\s\.]+', line[:-1])))
             dt_items[-1] *= 10     # convert decimal seconds to milliseconds
             dt = datetime.datetime(*dt_items)
-            # TODO: represent datetime as string for serialization
+            # TODO: represent datetime as string for serialization?
+            # TODO: address potential time zone issues
 
             title = f.readline().strip()
 
-            wn_min, wn_max, wn_step, wn_size = map(eval, f.readline().split())
+            #wn_min, wn_max, wn_step, wn_size = map(eval, f.readline().split())
+            wn_min, wn_max, wn_step, wn_size = np.fromfile(f, count=4, sep=" ")
 
-            data = np.fromfile(f, count=wn_size, sep=" ")
+            data = np.fromfile(f, count=int(wn_size), sep=" ")
             wn = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
 
             mwindows.append({
@@ -234,7 +251,7 @@ def read_spectrum(filename, spdim='spectrum', bdim='band', sdim='scan',
     }
     data_vars = {
         'spec_observed': (spdim, np.concatenate(spec_data)),
-        'spec_initial_snr': ((bdim, sdim), initial_snr),
+        'spec_snr_initial': ((bdim, sdim), initial_snr),
         'spec_datetime': (sdim, np.asarray(spec_dt)),
         'spec_sza': (sdim, np.asarray(spec_sza)),
         'spec_earth_radius': (sdim, np.asarray(spec_radius)),
@@ -271,9 +288,10 @@ def read_ctl(filename, ldim='level'):
 
     """
     global_attrs = {'source': os.path.abspath(filename)}
-    variables = {}
+    variables = OrderedDict()
+    attrs = OrderedDict()
 
-    def sanatize_var_name(name):
+    def sanatize_input_name(name):
         return name.replace('.', '__').strip()
 
     def eval_value(value):
@@ -285,6 +303,9 @@ def read_ctl(filename, ldim='level'):
                 return True
             elif v == 'F':
                 return False
+            re_double_fortran = re.compile(r'(\d*\.\d+)[dD]([-+]?\d+)')
+            if re_double_fortran.match(v):
+                return float(re_double_fortran.sub(r'\1E\2', v))
             return v
 
     with open(filename, 'r') as f:
@@ -295,21 +316,25 @@ def read_ctl(filename, ldim='level'):
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-            name, val = line.split('=')
-            name = sanatize_var_name(name)
+            splitted_line = line.split('=')
+            if len(splitted_line) < 2:
+                splitted_line.append('')
+            name, val = splitted_line
+            name = sanatize_input_name(name)
             if 'profile' in name and 'sigma' in name:
                 # sigma profile
                 # assume that 'gas.layers' is already parsed
                 if not val.strip():
-                    val = np.fromfile(f, count=global_attrs['gas__layers'],
+                    val = np.fromfile(f, count=attrs['gas__layers'],
                                       sep=" ")
                 else:
-                    val = np.fromstring(val, count=global_attrs['gas__layers'],
+                    val = np.fromstring(val, count=attrs['gas__layers'],
                                       sep=" ")
                 variables[name] = (ldim, val)
             else:
-                 val = eval_value(val)
-                 global_attrs[name] = val
+                 attrs[name] = eval_value(val)
+
+    variables['sfit4_ctl'] = ([], np.nan, attrs)
 
     dataset = {
         'data_vars': variables,
