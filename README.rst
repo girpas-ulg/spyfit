@@ -1,5 +1,5 @@
-spyfit
-=======
+Spyfit
+======
 
 .. image:: https://img.shields.io/travis/benbovy/spyfit.svg
         :target: https://travis-ci.org/benbovy/spyfit
@@ -7,51 +7,34 @@ spyfit
         :target: https://pypi.python.org/pypi/spyfit
 
 **This package is currently under heavy development!
-It hasn't been released yet.**
+It hasn't been released yet. API is not stable.**
 
-**spyfit** is a user-friendly interface to the SFIT4_ retrieval software.
+**Spyfit** provides a set of tools for easy handling of FTIR retrieval data and
+for flexible setup and execution of retrieval processing pipelines.
 
-It provides command-line utilities, a Python API and a collection of
-helpful functions, which all aim to allow easier I/O handling, full automation
-and management of SFIT4 runs.
-
-Why spyfit?
-------------
-
-There are already Python codes related to SFIT4, e.g., those
-written by Eric Nussbaumer (the SFIT4 Layer0 and Layer1), Mathias Palm
-and Bavo Langerock.
-**spyfit** takes ideas from those codes and has features in common while
-it allows more flexibility. Additionaly, it aims to provide deep integration
-with the libraries of the Python scientific ecosystem (including emerging
-packages like xarray_) and using standard data models such as netCDF_.
-It also tries to follow as much as possible the good practices of Python
-coding (e.g., readability, reproducibility, using standard formats,
-PEP8 style guide / numpy docstrings, packaging...).
-
+Spyfit aims to provide deep integration with the libraries of the Python
+scientific ecosystem and promotes the use of standard data models
+such as netCDF_.
 
 Main Features
 -------------
 
-- Use the `Common Data Model`_ to store and handle retrieval data.
+- Uses the `Common Data Model`_ to store and handle retrieval data.
   The xarray_ package - a required dependency - implements this data model and
   provides a powerful framework for easy inspection, merging, processing and
   plotting of retrieval data.
-- Support various formats including:
+- Supports various formats including:
     - netCDF_ (read/write)
-    - SFIT4_ ascii output files (read-only) and input files (read/write)
+    - SFIT4_ ascii output files (read-only) and input files (read, write support
+      for the most used input files)
     - GEOMS_ compliant HDF4 format (read/write)
     - Easy export to various formats supported by xarray_ and pandas_
       (e.g., hdf5, csv, excel, SQL-databases...)
-- More readable, "pythonic" names for parameters and variables (also follow
-  the `CF`_ standard names when possible). Possibility to revert to the names
-  defined in the SFIT4 core code or in the `sfit4.ctl` file.
-- Calculation of retrieval error budgets.
-- Full automation of SFIT4 runs. Possibility to extract line list data directly
-  from the HITRANonline_ database and to extract pressure and temperature
-  profiles directly from online climate data via OpenDAP access (see, e.g.,
-  the datasets available at PSD_).
-- Highly configurable.
+- Tries to use readable, "pythonic" names for parameters and variables.
+- Calculation of retrieval error budgets (SFIT4).
+- Defines a basic, class-based system for flexible setup and execution
+  of retrieval pipelines (possibly including the execution of third-party
+  softwares like SFIT4).
 
 .. _SFIT4: https://wiki.ucar.edu/display/sfit4/Infrared+Working+Group+Retrieval+Code,+SFIT
 .. _Common Data Model: http://www.unidata.ucar.edu/software/thredds/current/netcdf-java/CDM
@@ -60,8 +43,6 @@ Main Features
 .. _pandas: http://pandas.pydata.org/
 .. _CF: http://cfconventions.org/
 .. _GEOMS: http://avdc.gsfc.nasa.gov/index.php?site=1178067684
-.. _HITRANonline: http://hitran.org/
-.. _PSD: http://www.esrl.noaa.gov/psd/data/gridded/
 
 Documentation
 -------------
@@ -81,8 +62,5 @@ License
 Copyright (C) Benoit Bovy, GIRPAS (Ulg) 2015.
 
 Licensed under the GNU General Public License (GPLv3_). See LICENSE.
-
-Some portions of this code have been inspired and/or modified from code
-written by Bavo Langerock.
 
 .. _GPLv3: http://www.gnu.org/licenses/gpl-3.0.fr.html
