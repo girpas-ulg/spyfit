@@ -45,6 +45,6 @@ About
 
 spyfit is part of various Python tools developped for FTIR spectroscopy and
 atmospheric chemistry modelling at the Infrared Group of Atmospheric and
-Solar Physics - `GIRPAS`_ laboratory (University of Liège, Belgium).
+Solar Physics - `GIRPAS`_ laboratory (University of Liege, Belgium).
 
 .. _GIRPAS: http://labos.ulg.ac.be/girpas/en/
