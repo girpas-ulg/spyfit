@@ -5,9 +5,12 @@ Spyfit
         :target: https://travis-ci.org/benbovy/spyfit
 .. image:: https://img.shields.io/pypi/v/spyfit.svg
         :target: https://pypi.python.org/pypi/spyfit
+.. image:: https://readthedocs.org/projects/spyfit/badge/?version=master
+        :target: http://spyfit.readthedocs.io/en/master/?badge=master
+        :alt: Documentation Status
 
-**This package is currently under heavy development!
-It hasn't been released yet. API is not stable.**
+**This package is currently under heavy development:** it hasn't been released
+yet (some features below are still missing but planned). API is not stable.
 
 **Spyfit** provides a set of tools for easy handling of FTIR retrieval data and
 for flexible setup and execution of retrieval processing pipelines.
@@ -41,15 +44,12 @@ Main Features
 .. _netCDF: http://www.unidata.ucar.edu/software/netcdf
 .. _xarray: http://xarray.pydata.org
 .. _pandas: http://pandas.pydata.org/
-.. _CF: http://cfconventions.org/
 .. _GEOMS: http://avdc.gsfc.nasa.gov/index.php?site=1178067684
 
 Documentation
 -------------
 
-Not yet available.
-
-.. The official documentation is hosted on ReadTheDocs: https://spyfit.readthedocs.org.
+The official documentation is hosted on ReadTheDocs: https://spyfit.readthedocs.org.
 
 Report Issues
 -------------
