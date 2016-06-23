@@ -43,4 +43,4 @@ output/*/index.html
 doc/_build
 
 # IPython / Jupyter
-ipynb/.ipynb_checkpoints
+examples/.ipynb_checkpoints
