@@ -1,0 +1,9 @@
+name: spyfit
+dependencies:
+  - python=3.5
+  - numpy=1.10
+  - pandas=0.17.1
+  - xarray=0.7.2
+  - numpydoc=0.5
+  - ipython=4.0.1
+  - sphinx=1.2.3  # pin to avoid https://github.com/sphinx-doc/sphinx/issues/1822
