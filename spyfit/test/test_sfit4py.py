@@ -10,7 +10,7 @@ Tests for `spyfit` module.
 
 import unittest
 
-from spyfit import spyfit
+import spyfit
 
 
 class TestSpyfit(unittest.TestCase):
