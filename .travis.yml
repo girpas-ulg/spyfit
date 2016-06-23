@@ -1,30 +1,40 @@
-# Config file for automatic testing at travis-ci.org
-# This file will be regenerated if you run travis_pypi_setup.py
+# see http://conda.pydata.org/docs/travis.html
 
 language: python
+sudo: false   # use container based build
+notifications:
+  email: false
 
-env:
-  - TOXENV=py34
-  - TOXENV=py33
-  - TOXENV=py27
-  - TOXENV=py26
-  - TOXENV=pypy
+matrix:
+  fast_finish: True
+  include:
+    - python: 2.7
+      env: CONDA_ENV=py27-min
+    - python: 3.4
+      env: CONDA_ENV=py34
+    - python: 3.5
+      env: CONDA_ENV=py35
 
-# command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
-install: pip install -U tox
+before_install:
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+      wget http://repo.continuum.io/miniconda/Miniconda-3.16.0-Linux-x86_64.sh -O miniconda.sh;
+    else
+      wget http://repo.continuum.io/miniconda/Miniconda3-3.16.0-Linux-x86_64.sh -O miniconda.sh;
+    fi
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no --set show_channel_urls true
+  - conda update -q conda
+  - conda info -a
 
-# command to run tests, e.g. python setup.py test
-script: tox
+install:
+  - conda env create --file ci/requirements-$CONDA_ENV.yml
+  - source activate test_env
+  - python setup.py install
 
-# After you create the Github repo and add it to Travis, run the
-# travis_pypi_setup.py script to finish PyPI deployment setup
-deploy:
-  provider: pypi
-  distributions: sdist bdist_wheel
-  user: benbovy
-  password:
-    secure: PLEASE_REPLACE_ME
-  on:
-    tags: true
-    repo: benbovy/spyfit
-    condition: $TOXENV == py27
+script:
+  - py.test spyfit --cov=spyfit --cov-report term-missing
+
+after_success:
+  - coveralls
