@@ -2,7 +2,10 @@
 
 from .retrieval import load_dataset
 
-
-__author__ = 'Benoit Bovy'
-__email__ = 'bbovy@ulg.ac.be'
-__version__ = '0.1.0dev'
+try:
+    from .version import version as __version__
+except ImportError:  # pragma: no cover
+    raise ImportError('spyfit not properly installed. If you are running from '
+                      'the source directory, please instead create a new '
+                      'virtual environment (using conda or virtualenv) and '
+                      'then install it in-place by running: pip install -e .')
