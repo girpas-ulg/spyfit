@@ -5,6 +5,9 @@ Spyfit
         :target: https://travis-ci.org/girpas-ulg/spyfit
 .. image:: https://coveralls.io/repos/github/girpas-ulg/spyfit/badge.svg?branch=master
         :target: https://coveralls.io/github/girpas-ulg/spyfit?branch=master
+.. image:: https://landscape.io/github/girpas-ulg/spyfit/master/landscape.svg?style=flat
+        :target: https://landscape.io/github/girpas-ulg/spyfit/master
+        :alt: Code Health
 .. image:: https://img.shields.io/pypi/v/spyfit.svg
         :target: https://pypi.python.org/pypi/spyfit
 .. image:: https://readthedocs.org/projects/spyfit/badge/?version=master
