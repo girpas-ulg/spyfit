@@ -72,7 +72,7 @@ if not ISRELEASED:
         if pipe is None or pipe.returncode != 0:
             # no git, or not in git dir
             if os.path.exists('spyfit/version.py'):
-                warnings.warn("WARNING: Couldn't get git revision, using existing xarray/version.py")
+                warnings.warn("WARNING: Couldn't get git revision, using existing spyfit/version.py")
                 write_version = False
             else:
                 warnings.warn("WARNING: Couldn't get git revision, using generic version string")

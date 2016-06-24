@@ -117,7 +117,8 @@ def load_sfit4_rundir(dirname):
         # overwrite spec_fitted__ALL (not the same precision
         # than in pbpfile)
         overwrite_spec = 'spec_fitted__ALL'
-        _read_and_merge(ds, read_single_spectra, 'spc.*',
+        _read_and_merge(ds, read_single_spectra,
+                        os.path.join(dirname, 'spc.*'),
                         overwrite_vars=overwrite_spec)
 
     # TODO: convert spectrum coord to multi-index

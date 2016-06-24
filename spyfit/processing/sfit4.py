@@ -2,8 +2,10 @@
 Default processing classes for SFIT4.
 """
 
+import os
 import subprocess
 
+from .base import ProcessingBase
 from .. import config
 
 
@@ -15,7 +17,8 @@ class SFIT4ProcessingBase(ProcessingBase):
     A simple SFIT4 run with default pre- and postprcessing
     (Layer0 and Layer1).
     """
-    def __init__(run_dir, bnr_spec, ctl="sfit4.ctl", hbin_input="hbin.input"):
+    def __init__(self, run_dir, bnr_spec, ctl="sfit4.ctl",
+                 hbin_input="hbin.input"):
         os.chdir(run_dir)
         self.path2exe = config.sfit4_exe_path
 
@@ -34,12 +37,12 @@ class SFIT4ProcessingBase(ProcessingBase):
             pass
 
         def run(self):
-            preprocess()
+            self.preprocess()
 
             sfit4_exe = os.path.join(self.path2exe, "sfit4")
             subprocess.Popen(sfit4_exe)
 
-            postprocess()
+            self.postprocess()
 
         def postprocess(self):
             pass

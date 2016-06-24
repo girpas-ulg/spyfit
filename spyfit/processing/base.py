@@ -7,11 +7,11 @@ class ProcessingBase(object):
     """Abstract class for retrieval processing.
 
     """
-    def preprocess():
+    def preprocess(self):
         raise NotImplementedError
 
-    def postprocess():
+    def postprocess(self):
         raise NotImplementedError
 
-    def run():
+    def run(self):
         raise NotImplementedError

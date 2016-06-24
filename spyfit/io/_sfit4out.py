@@ -7,6 +7,7 @@ import re
 import os
 import math
 import glob
+import warnings
 
 import numpy as np
 
@@ -471,12 +472,9 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
         global_attrs = header
         global_attrs['source'] = os.path.abspath(filename)
 
-        # n_fits = nb. of bands * nb. of spectra used in each band
-        # n_bands = nb. of bands
-        n_fits, n_bands = list(map(int, f.readline().split()))
+        # n_fits = nb. of bands * nb. of spectra/scans used in each band
+        n_fits, _ = list(map(int, f.readline().split()))
 
-        bands, scans = [], []
-        spectrum_header = {}
         spec_data = {'observed': [], 'fitted': []}
         coords_data = {wcoord: [], bcoord: [], scoord: []}
         spec_attrs = {}
@@ -495,8 +493,8 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
             # fit metadata line
             line = f.readline()
             metadata = list(map(eval, line.split()))
-            spec_code, wn_step, size, wn_min, wn_max = metadata[:5]
-            u, band_id, scan_id, n_ret_gas = metadata[5:]
+            _, wn_step, size, wn_min, wn_max = metadata[:5]
+            _, band_id, scan_id, n_ret_gas = metadata[5:]
 
             # TODO: refactor! what is u value???
             # TODO: make sure wn_min, wn_max, wn_step do not vary in a band!!
@@ -596,21 +594,20 @@ def read_single_spectrum(filename, var_name=None, wdim='spec_wn'):
         A CDM-structured dictionary.
 
     """
-    with open(filename, 'r') as f:
-        raw_data = _read_single_spec(filename)
-        gas, band_id, scan_id, iteration, wavenumber, data = raw_data
-        attrs =  {'source': os.path.abspath(filename), 'gas': gas,
-                  'band_id': band_id, 'scan_id': scan_id,
-                  'iteration': iteration}
+    raw_data = _read_single_spec(filename)
+    gas, band_id, scan_id, iteration, wavenumber, data = raw_data
+    attrs =  {'source': os.path.abspath(filename), 'gas': gas,
+              'band_id': band_id, 'scan_id': scan_id,
+              'iteration': iteration}
 
-        if var_name is None:
-            var_name = "spec_fitted__{}__band{}__scan{}__iter{}".format(
-                gas, band_id, scan_id, iteration
-            )
-        if not var_name:
-            var_name = sanatize_name(os.path.basename(filename))
+    if var_name is None:
+        var_name = "spec_fitted__{}__band{}__scan{}__iter{}".format(
+            gas, band_id, scan_id, iteration
+        )
+    if not var_name:
+        var_name = sanatize_name(os.path.basename(filename))
 
-        wdim_band = '{}__band{}'.format(wdim, band_id)
+    wdim_band = '{}__band{}'.format(wdim, band_id)
 
     dataarray = {
         'data': data,
@@ -661,52 +658,79 @@ def read_single_spectra(filename, spdim='spectrum', idim='iteration',
     """
     global_attrs = {'source': os.path.abspath(filename)}
 
-    file_data = (_read_single_spec(f) for f in glob.glob(filename))
-    fgas, fband, fscan, fiteration, fwn, fdata = zip(*file_data)
+    file_data = [_read_single_spec(f) for f in glob.glob(filename)]
+    if not file_data:
+        raise ValueError('no single spectrum file found in {}'
+                         .format(os.path.abspath(filename)))
 
-    aa = lambda v: np.asarray(v)
-    fiteration, fband, fscan = aa(fiteration), aa(fband), aa(fscan)
-    fgas, fwn, fdata = aa(fgas), aa(fwn), aa(fdata)
+    keys = ('gas', 'band', 'scan', 'iteration', 'wn', 'spec')
+    data_vals = {k: np.asarray(v) for k, v in zip(keys, zip(*file_data))}
+    unique_vals = {k: np.unique(v) for k, v in data_vals.items()
+                   if k not in ('wn', 'spec')}
 
-    ua = lambda a: np.unique(a)
-    ugas, uscan, uband = ua(fgas), ua(fscan), ua(fband)
-    uiteration = ua(fiteration)
-    if -1 in uiteration:
-        # -1 is the last iteration
-        uiteration = np.roll(uiteration, -1)
+    def _get_sb_loc(s, b):
+        indexer = ((data_vals['scan'] == s) & (data_vals['band'] == b))
+        loc = indexer.nonzero()[0]
+        if loc.size > 0:
+            return loc[0]
+        else:
+            return loc
 
     def _get_loc(g, i, s, b):
-        loc = ((fgas == g) & (fiteration == i)
-               & (fscan == s) & (fband == b)).nonzero()[0]
+        indexer = ((data_vals['gas'] == g) & (data_vals['iteration'] == i)
+                   & (data_vals['scan'] == s) & (data_vals['band'] == b))
+        loc = indexer.nonzero()[0]
+        if not loc.size:
+            # check if files exist for that band and scan and for
+            # other gases and/or iterations
+            if np.any((data_vals['scan'] == s) & (data_vals['band'] == b)):
+                warnings.warn("expected output spectrum for gas {}, "
+                              "scan {}, band {} & iteration {} but "
+                              "no file found".format(g, s, b, i))
+                return None
         if loc.size == 1:
             return loc[0]
         elif loc.size > 1:
-            raise ValueError('Duplicate file found for spectrum '
+            raise ValueError('duplicate file found for spectrum '
                              '{} (iteration: {}, scan: {}, band: {})'
                              .format(g, i, s, b))
         return loc
 
-    _get_loc_0 = lambda s, b: _get_loc(ugas[0], uiteration[0], s, b)
+    band_size = {b: data_vals['spec'][data_vals['band'] == b][0].size
+                 for b in unique_vals['band']}
+    sb_size = [(s, b, data_vals['spec'][_get_sb_loc(s, b)].size)
+               for s in unique_vals['scan'] for b in unique_vals['band']]
 
-    def _get_flat_sorted(data, g, i):
-        return np.concatenate([data[_get_loc(g, i, s, b)]
-                               for s in uscan for b in uband])
+    def _get_flat_sorted(data, g, i, fallback_wn=False):
+        sel_data = []
+        for s in unique_vals['scan']:
+            for b in unique_vals['band']:
+                loc = _get_loc(g, i, s, b)
+                if loc is None:
+                    if fallback_wn:
+                        # get wavenumber values from another gas / iteration
+                        sel_data.append(data[_get_sb_loc(s, b)])
+                    else:
+                        sel_data.append(np.full(band_size[b], np.nan))
+                else:
+                    sel_data.append(data[loc])
+        return np.concatenate(sel_data)
 
     spec_data = {}
-    for g in ugas:
-        spec_data[g] = np.vstack([_get_flat_sorted(fdata, g, i)]
-                                 for i in uiteration)
+    for g in unique_vals['gas']:
+        spec_data[g] = np.vstack([_get_flat_sorted(data_vals['spec'], g, i)]
+                                 for i in unique_vals['iteration'])
 
-    wavenumber = _get_flat_sorted(fwn, ugas[0], uiteration[0])
-    scan = np.concatenate([np.repeat(s, fdata[_get_loc_0(s, b)].size)
-                           for s in uscan for b in uband])
-    band = np.concatenate([np.repeat(b, fdata[_get_loc_0(s, b)].size)
-                           for s in uscan for b in uband])
+    wavenumber = _get_flat_sorted(data_vals['wn'], unique_vals['gas'][0],
+                                  unique_vals['iteration'][0],
+                                  fallback_wn=True)
+    scan = np.concatenate([np.repeat(s, size) for s, b, size in sb_size])
+    band = np.concatenate([np.repeat(b, size) for s, b, size in sb_size])
 
     coords = {wcoord: (spdim, wavenumber),
               scoord: (spdim, scan),
               bcoord: (spdim, band),
-              idim: uiteration}
+              idim: unique_vals['iteration']}
     variables = {'spec_fitted__{}'.format(k): ((idim, spdim), v)
                  for k, v in spec_data.items()}
 
@@ -749,7 +773,7 @@ def read_solar_spectrum(filename, var_name='', wdim='spec_wn_solar'):
         if not var_name:
             var_name = sanatize_name(os.path.basename(filename))
 
-        size, wn_min, wn_step = map(eval, f.readline().split())
+        size, _, wn_step = map(eval, f.readline().split())
 
         data = np.loadtxt(f)
         wavenumber = data[:, 0]

@@ -8,7 +8,7 @@ dictionnaries.
 import datetime
 import re
 import os
-import math
+from ast import literal_eval
 from collections import OrderedDict
 
 import numpy as np
@@ -45,11 +45,11 @@ def read_layers(filename, ldim='level'):
     with open(filename, 'r') as f:
         attrs = {'header': f.readline().strip()}
         n_layers = int(f.readline())
-        dummy = f.readline()
+        _ = f.readline()
 
         data = np.loadtxt(f)
         assert data.shape[0] == n_layers
-        index, lbound, thick, growth, points = data.transpose()
+        _, lbound, thick, growth, points = data.transpose()
 
         coords = {
             # start level at 1
@@ -295,19 +295,19 @@ def read_ctl(filename, ldim='level'):
     def sanatize_input_name(name):
         return name.replace('.', '__').strip()
 
-    def eval_value(value):
+    def eval_value(str):
+        s = str.strip()
         try:
-            return eval(value)
-        except Exception:
-            v = value.strip()
-            if v == 'T':
+            return literal_eval(s)
+        except:
+            if s == 'T':
                 return True
-            elif v == 'F':
+            elif s == 'F':
                 return False
             re_double_fortran = re.compile(r'(\d*\.\d+)[dD]([-+]?\d+)')
-            if re_double_fortran.match(v):
-                return float(re_double_fortran.sub(r'\1E\2', v))
-            return v
+            if re_double_fortran.match(s):
+                return float(re_double_fortran.sub(r'\1E\2', s))
+            return s
 
     with open(filename, 'r') as f:
         while True:
