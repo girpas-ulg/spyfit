@@ -73,7 +73,8 @@ def read_matrix(filename, var_name='', dims=''):
                  'source': os.path.abspath(filename)}
         global_attrs = header
 
-        data_shape = tuple([int(d) for d in f.readline().split() if int(d) > 1])
+        data_shape = tuple([int(d) for d in f.readline().split()
+                            if int(d) > 1])
         data = np.fromfile(f, sep=" ").reshape(data_shape)
 
         if not len(dims):
@@ -144,7 +145,7 @@ def read_table(filename, var_name='', dims=(), index_cols=True):
         var_name = sanatize_name(os.path.basename(filename))
 
     if not len(dims):
-            dims = ('rows', 'cols')
+        dims = ('rows', 'cols')
 
     with open(filename, 'r') as f:
         header = parse_header(f.readline())
@@ -228,7 +229,7 @@ def read_profiles(filename, var_name_prefix='', ldim='level', ret_gases=False):
                 attrs = {'gas_index': gindex,
                          'is_retrieved_gas': is_retrieved_gas}
             else:
-                cname = cname.lower()   # lower-case name for non-gases profiles
+                cname = cname.lower()  # lower-case name for non-gases profiles
                 attrs = {}
             variables[var_name_prefix + '__' + cname] = ((ldim,), prof, attrs)
 
@@ -316,8 +317,9 @@ def read_state_vector(filename, ldim='level', pdim='param'):
 
         # altitude is a coordinate
         _ = f.readline()
-        variables['station_altitude'] = ((ldim,),
-                                         np.fromfile(f, count=nlevels, sep=" "))
+        variables['station_altitude'] = (
+            (ldim,), np.fromfile(f, count=nlevels, sep=" ")
+        )
 
         # apriori profiles of pressure and temperature
         for p in ('apriori_pressure', 'apriori_temperature'):
@@ -444,8 +446,8 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
         will be flattened as a 1-d array.
     idim : str
         Name of the iteration dimension (default: 'iteration'). This is not
-        very useful here as 'out.pbpfile' stores spectral data for only the last
-        iteration but this is to be consistent with data returned by
+        very useful here as 'out.pbpfile' stores spectral data for only the
+        last iteration but this is to be consistent with data returned by
         the `read_single_spectrum` and `read_single_spectra` functions.
     wcoord : str
         Name of the wavenumber coordinate for spectral data
@@ -456,8 +458,8 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
         Name of the coordinate for spectral bands (default: 'spec_band').
     parse_sp_header : callable or None
         A callable wich must accept the header line of a spectrum as input
-        and must return a dictionary of extracted metadata that will be added in
-        the attributes of the observed spectrum entry.
+        and must return a dictionary of extracted metadata that will be added
+        in the attributes of the observed spectrum entry.
         If None (default), only the plain header line (string) will be added
         in the attributes.
 
@@ -486,8 +488,8 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
             # fit header line
             scan_hdr = f.readline().strip()
             # TODO: add parsed header elements as separate attrs
-            #iheader = {'spectrum_header': line.strip()}
-            #if parse_sp_header is not None:
+            # iheader = {'spectrum_header': line.strip()}
+            # if parse_sp_header is not None:
             #    iheader.update(parse_sp_header(line))
 
             # fit metadata line
@@ -596,9 +598,9 @@ def read_single_spectrum(filename, var_name=None, wdim='spec_wn'):
     """
     raw_data = _read_single_spec(filename)
     gas, band_id, scan_id, iteration, wavenumber, data = raw_data
-    attrs =  {'source': os.path.abspath(filename), 'gas': gas,
-              'band_id': band_id, 'scan_id': scan_id,
-              'iteration': iteration}
+    attrs = {'source': os.path.abspath(filename), 'gas': gas,
+             'band_id': band_id, 'scan_id': scan_id,
+             'iteration': iteration}
 
     if var_name is None:
         var_name = "spec_fitted__{}__band{}__scan{}__iter{}".format(
@@ -677,8 +679,8 @@ def read_single_spectra(filename, spdim='spectrum', idim='iteration',
             return loc
 
     def _get_loc(g, i, s, b):
-        indexer = ((data_vals['gas'] == g) & (data_vals['iteration'] == i)
-                   & (data_vals['scan'] == s) & (data_vals['band'] == b))
+        indexer = ((data_vals['gas'] == g) & (data_vals['iteration'] == i) &
+                   (data_vals['scan'] == s) & (data_vals['band'] == b))
         loc = indexer.nonzero()[0]
         if not loc.size:
             # check if files exist for that band and scan and for

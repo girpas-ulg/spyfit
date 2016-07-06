@@ -6,9 +6,9 @@ import os
 import re
 import sys
 import warnings
+import subprocess
 
 from setuptools import setup, find_packages
-from setuptools import Command
 
 
 MAJOR = 0
@@ -54,7 +54,6 @@ FULLVERSION = VERSION
 write_version = True
 
 if not ISRELEASED:
-    import subprocess
     FULLVERSION += '.dev'
 
     pipe = None
@@ -72,12 +71,15 @@ if not ISRELEASED:
         if pipe is None or pipe.returncode != 0:
             # no git, or not in git dir
             if os.path.exists('spyfit/version.py'):
-                warnings.warn("WARNING: Couldn't get git revision, using existing spyfit/version.py")
+                warnings.warn("WARNING: Couldn't get git revision, "
+                              "using existing spyfit/version.py")
                 write_version = False
             else:
-                warnings.warn("WARNING: Couldn't get git revision, using generic version string")
+                warnings.warn("WARNING: Couldn't get git revision, "
+                              "using generic version string")
         else:
-            # have git, in git dir, but may have used a shallow clone (travis does this)
+            # have git, in git dir, but may have used a shallow clone
+            # (travis does this)
             rev = so.strip()
             # makes distutils blow up on Python 2.7
             if sys.version_info[0] >= 3:
@@ -89,7 +91,8 @@ if not ISRELEASED:
                 # to get an ordering on dev version strings.
                 rev = "v%s.dev-%s" % (VERSION, rev)
 
-            # Strip leading v from tags format "vx.y.z" to get th version string
+            # Strip leading v from tags format "vx.y.z" to get th version
+            # string
             FULLVERSION = rev.lstrip('v')
 
 else:
