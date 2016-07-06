@@ -11,7 +11,7 @@ using the data model and high-level API functions implemented in `xarray`
 
 import xarray as xr
 
-from .io.sfit4 import load_sfit4_rundir
+from .io.sfit4 import load_sfit4
 
 
 def load_dataset(filename_or_path, fmt='netcdf'):
@@ -23,9 +23,9 @@ def load_dataset(filename_or_path, fmt='netcdf'):
     filename_or_path : str or sequence
         name or path to the file or directory. Multiple file name(s) or
         directorie(s) can be given (not yet implemented).
-    fmt : {'netcdf', 'sfit4_rundir', 'geoms'}
-        supported formats are netcdf (default) and sfit4 run directory
-        of input/output ascii files. GEOMS format is not yet implemented.
+    fmt : {'netcdf', 'sfit4', 'geoms'}
+        supported formats are netcdf (default) and sfit4 input/output
+        ascii files. GEOMS format is not yet implemented.
 
     Returns
     -------
@@ -36,7 +36,7 @@ def load_dataset(filename_or_path, fmt='netcdf'):
     """
     if fmt == 'netcdf':
         return xr.open_dataset(filename_or_path)
-    elif fmt == 'sfit4_rundir':
-        return load_sfit4_rundir(filename_or_path)
+    elif fmt == 'sfit4':
+        return load_sfit4(filename_or_path)
     else:
         raise ValueError("Unrecognized format '{}'".format(fmt))
