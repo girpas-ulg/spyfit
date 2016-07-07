@@ -6,7 +6,7 @@ Contributing
 Contributions are welcome, and they are greatly appreciated!
 
 You can contribute either by reporting bugs or submitting feedback
-at https://github.com/benbovy/spyfit/issues or by sending pull
+at https://github.com/girpas-ulg/spyfit/issues or by sending pull
 requests through the spyfit repository on GitHub.
 
 Get Started!
