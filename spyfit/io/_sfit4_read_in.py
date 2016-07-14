@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Read (write) SFIT4 input ascii files into/from xarray-compliant
+Read (write) SFIT4 input ascii files into (from) xarray-compliant
 dictionnaries.
 """
 
@@ -49,7 +49,7 @@ def read_layers(filename, ldim='level'):
 
         data = np.loadtxt(f)
         assert data.shape[0] == n_layers
-        _, lbound, thick, growth, points = data.transpose()
+        _, lbound, _, _, points = data.transpose()
 
         coords = {
             # start level at 1
@@ -117,7 +117,7 @@ def read_ref_profiles(filename, rdim='rlevel'):
             data_vars['reference__' + profile] = (rdim, data, attrs)
 
         # gas profiles
-        for iprofile in range(n_gases):
+        for i in range(n_gases):
             header = re.match(REF_GAZ_PATTERN, f.readline()).groupdict()
             data = get_data(f, n_levels)
             if header['name'] == 'OTHER':
@@ -179,17 +179,14 @@ def read_spectrum(filename, spdim='spectrum', bdim='band', sdim='scan',
             sza, earth_radius, lat, lon, snr = map(float, line.split())
 
             line = f.readline().strip()
-            dt_items = list(map(int, re.split('[\s\.]+', line[:-1])))
+            dt_items = list(map(int, re.split(r'[\s\.]+', line[:-1])))
             dt_items[-1] *= 10     # convert decimal seconds to milliseconds
             dt = datetime.datetime(*dt_items)
             # TODO: represent datetime as string for serialization?
             # TODO: address potential time zone issues
 
             title = f.readline().strip()
-
-            #wn_min, wn_max, wn_step, wn_size = map(eval, f.readline().split())
             wn_min, wn_max, wn_step, wn_size = np.fromfile(f, count=4, sep=" ")
-
             data = np.fromfile(f, count=int(wn_size), sep=" ")
             wn = np.arange(wn_min, wn_max + wn_step / 2., wn_step)
 
@@ -271,7 +268,7 @@ def read_spectrum(filename, spdim='spectrum', bdim='band', sdim='scan',
 
 def read_ctl(filename, ldim='level'):
     """
-    Read profile layers.
+    Read control file.
 
     Use this function to load 'sfit4.ctl'.
 
@@ -295,8 +292,8 @@ def read_ctl(filename, ldim='level'):
     def sanatize_input_name(name):
         return name.replace('.', '__').strip()
 
-    def eval_value(str):
-        s = str.strip()
+    def eval_value(string):
+        s = string.strip()
         try:
             return literal_eval(s)
         except:
@@ -330,10 +327,10 @@ def read_ctl(filename, ldim='level'):
                                       sep=" ")
                 else:
                     val = np.fromstring(val, count=attrs['gas__layers'],
-                                      sep=" ")
+                                        sep=" ")
                 variables[name] = (ldim, val)
             else:
-                 attrs[name] = eval_value(val)
+                attrs[name] = eval_value(val)
 
     variables['sfit4_ctl'] = ([], np.nan, attrs)
 

@@ -8,13 +8,14 @@ import os
 
 import xarray as xr
 
-from ._sfit4out import (read_ak_matrix, read_aprfs, read_matrix,
-                        read_param_iterations, read_profiles, read_rprfs,
-                        read_seinv_vector, read_single_spectra,
-                        read_single_spectrum, read_solar_spectrum,
-                        read_spectra, read_state_vector, read_summary,
-                        read_table)
-from ._sfit4in import (read_ctl, read_layers, read_ref_profiles, read_spectrum)
+from ._sfit4_read_out import (read_ak_matrix, read_aprfs, read_matrix,
+                              read_param_iterations, read_profiles, read_rprfs,
+                              read_seinv_vector, read_single_spectra,
+                              read_single_spectrum, read_solar_spectrum,
+                              read_spectra, read_state_vector, read_summary,
+                              read_table)
+from ._sfit4_read_in import (read_ctl, read_layers, read_ref_profiles,
+                             read_spectrum)
 
 
 # public API
@@ -106,7 +107,7 @@ def _read_and_merge(dataset, read_func, filename, **kwargs):
     dataset.merge(temp_ds, inplace=True, compat='equals', **kwargs)
 
     # xarray doesn't handle attribute merging
-    # update attrs dicts without checking
+    # update attrs dicts without checking (overwrite by default)
     for k, v in temp_ds.variables.items():
         dataset[k].attrs.update(v.attrs)
     dataset.attrs.update(temp_ds.attrs)
@@ -135,8 +136,9 @@ def load_sfit4(ctl_filename):
 
     for input_name, v in _MAP_CTL_READ_FUNC.items():
         default_filename, read_func = v
-        if not sfit4_inputs.get(input_name, False):
-            continue
+        if input_name.startswith('out'):
+            if not sfit4_inputs.get(input_name, False):
+                continue
         filename = sfit4_inputs.get('file__{}'.format(input_name),
                                     default_filename)
         if not os.path.isabs(filename):
