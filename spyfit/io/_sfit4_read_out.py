@@ -90,7 +90,7 @@ def read_ak_matrix(filename, ldim='level', kdim='kernel'):
 
     See Also
     --------
-    `read_matrix`
+    :func:`read_matrix`
 
     """
     return read_matrix(filename, var_name='averaging_kernels',
@@ -104,7 +104,7 @@ def read_seinv_vector(filename, ddim='diag'):
 
     See Also
     --------
-    `read_matrix`
+    :func:`read_matrix`
 
     """
     return read_matrix(filename, var_name='seinv', dims=ddim)
@@ -242,7 +242,7 @@ def read_aprfs(filename, ldim='level'):
 
     See Also
     --------
-    `read_profiles`
+    :func:`read_profiles`
 
     """
     return read_profiles(filename, ldim=ldim, var_name_prefix='apriori_',
@@ -257,7 +257,7 @@ def read_rprfs(filename, ldim='level'):
 
     See Also
     --------
-    `read_profiles`
+    :func:`read_profiles`
 
     """
     return read_profiles(filename, ldim=ldim, var_name_prefix='retrieved_',

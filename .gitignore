@@ -41,6 +41,7 @@ output/*/index.html
 
 # Sphinx
 doc/_build
+doc/generated
 
 # IPython / Jupyter
 examples/.ipynb_checkpoints

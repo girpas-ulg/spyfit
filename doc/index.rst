@@ -24,6 +24,7 @@ Documentation
    :maxdepth: 1
 
    installing
+   api
    contributing
 
 Get in touch

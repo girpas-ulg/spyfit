@@ -8,7 +8,7 @@ import os
 
 import xarray as xr
 
-from ._sfit4_read_out import (read_ak_matrix, read_aprfs, read_matrix,
+from ._sfit4_read_out import (read_ak_matrix, read_aprfs, read_matrix,   # noqa
                               read_param_iterations, read_profiles, read_rprfs,
                               read_seinv_vector, read_single_spectra,
                               read_single_spectrum, read_solar_spectrum,
@@ -16,14 +16,7 @@ from ._sfit4_read_out import (read_ak_matrix, read_aprfs, read_matrix,
                               read_table)
 from ._sfit4_read_in import (read_ctl, read_layers, read_ref_profiles,
                              read_spectrum)
-from ._sfit4_write_in import write_reference
-
-
-# public API
-read_single_spectrum = read_single_spectrum
-read_profiles = read_profiles
-read_matrix = read_matrix
-write_reference = write_reference
+from ._sfit4_write_in import write_reference   # noqa
 
 
 def _read_g_out(fname):
