@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Read (write) SFIT4 input ascii files into (from) xarray-compliant
-dictionnaries.
+Read SFIT4 input ascii files into (from) xarray-compliant dictionnaries.
 """
 
 import datetime
@@ -12,9 +11,6 @@ from ast import literal_eval
 from collections import OrderedDict
 
 import numpy as np
-
-
-__all__ = ['read_layers', 'read_ref_profiles', 'read_spectrum', 'read_ctl']
 
 
 REF_GAZ_PATTERN = r"\s*(?P<index>\d+)\s+(?P<name>\w+)\s+(?P<description>.*)"
@@ -113,7 +109,7 @@ def read_ref_profiles(filename, rdim='rlevel'):
             description = f.readline().strip()
             data = get_data(f, n_levels)
             attrs = {'description': description,
-                     'order': order}
+                     'ordering': order}
             data_vars['reference__' + profile] = (rdim, data, attrs)
 
         # gas profiles
@@ -125,7 +121,7 @@ def read_ref_profiles(filename, rdim='rlevel'):
             attrs = {
                 'gas_index': int(header['index']),
                 'description': header['description'].strip(),
-                'order': order
+                'ordering': order
             }
             vname = 'reference__{}'.format(header['name'])
             data_vars[vname] = (rdim, data, attrs)

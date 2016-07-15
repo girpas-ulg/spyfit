@@ -12,13 +12,6 @@ import warnings
 import numpy as np
 
 
-__all__ = ['read_matrix', 'read_ak_matrix', 'read_seinv_vector',
-           'read_table', 'read_profiles', 'read_aprfs', 'read_rprfs',
-           'read_state_vector', 'read_param_iterations',
-           'read_spectra', 'read_single_spectrum', 'read_single_spectra',
-           'read_solar_spectrum', 'read_summary']
-
-
 HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
                   r"[\w\s:-]*RUNTIME:(?P<runtime>[0-9:\-]+)"
                   r"\s*(?P<description>.+)")
