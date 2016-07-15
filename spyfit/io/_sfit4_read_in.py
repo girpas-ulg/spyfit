@@ -6,11 +6,12 @@ Read SFIT4 input ascii files into (from) xarray-compliant dictionnaries.
 
 import datetime
 import re
-import os
-from ast import literal_eval
 from collections import OrderedDict
 
 import numpy as np
+
+from .utils import (expand_path, get_next_line, sanatize_var_name,
+                    get_1d_array, eval_value)
 
 
 REF_GAZ_PATTERN = r"\s*(?P<index>\d+)\s+(?P<name>\w+)\s+(?P<description>.*)"
@@ -34,9 +35,8 @@ def read_layers(filename, ldim='level'):
     dataset : dict
         A CDM-structured dictionary.
 
-
     """
-    global_attrs = {'source': os.path.abspath(filename)}
+    global_attrs = {'source': expand_path(filename)}
 
     with open(filename, 'r') as f:
         attrs = {'header': f.readline().strip()}
@@ -80,20 +80,7 @@ def read_ref_profiles(filename, rdim='rlevel'):
         A CDM-structured dictionary.
 
     """
-    global_attrs = {'source': os.path.abspath(filename)}
-
-    def get_data(f, count):
-        # separators can be space or comma
-        current_position = f.tell()
-        data = np.fromfile(f, count=count, sep=" ")
-        if data.size != count:
-            f.seek(current_position)
-            data = np.fromfile(f, count=count, sep=",")
-            current_position = f.tell()
-            if f.read(1) != '\n':
-                # no trailing comma
-                f.seek(current_position)
-        return data
+    global_attrs = {'source': expand_path(filename)}
 
     with open(filename, 'r') as f:
         order_desc, n_levels, n_gases = map(int, f.readline().split())
@@ -107,7 +94,7 @@ def read_ref_profiles(filename, rdim='rlevel'):
         # altitude, pressure and temperature profiles
         for profile in ('altitude', 'pressure', 'temperature'):
             description = f.readline().strip()
-            data = get_data(f, n_levels)
+            data = get_1d_array(f, n_levels)
             attrs = {'description': description,
                      'ordering': order}
             data_vars['reference__' + profile] = (rdim, data, attrs)
@@ -115,7 +102,7 @@ def read_ref_profiles(filename, rdim='rlevel'):
         # gas profiles
         for i in range(n_gases):
             header = re.match(REF_GAZ_PATTERN, f.readline()).groupdict()
-            data = get_data(f, n_levels)
+            data = get_1d_array(f, n_levels)
             if header['name'] == 'OTHER':
                 continue     # ignore unused gas indexes
             attrs = {
@@ -163,7 +150,7 @@ def read_spectrum(filename, spdim='spectrum', bdim='band', sdim='scan',
         A CDM-structured dictionary.
 
     """
-    global_attrs = {'source': os.path.abspath(filename)}
+    global_attrs = {'source': expand_path(filename)}
 
     with open(filename, 'r') as f:
         mwindows = []
@@ -281,40 +268,20 @@ def read_ctl(filename, ldim='level'):
         A CDM-structured dictionary.
 
     """
-    global_attrs = {'source': os.path.abspath(filename)}
+    global_attrs = {'source': expand_path(filename)}
     variables = OrderedDict()
     attrs = OrderedDict()
 
-    def sanatize_input_name(name):
-        return name.replace('.', '__').strip()
-
-    def eval_value(string):
-        s = string.strip()
-        try:
-            return literal_eval(s)
-        except:
-            if s == 'T':
-                return True
-            elif s == 'F':
-                return False
-            re_double_fortran = re.compile(r'(\d*\.\d+)[dD]([-+]?\d+)')
-            if re_double_fortran.match(s):
-                return float(re_double_fortran.sub(r'\1E\2', s))
-            return s
-
     with open(filename, 'r') as f:
         while True:
-            line = f.readline()
-            if not line:
+            line = get_next_line(f)
+            if line is None:
                 break
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
             splitted_line = line.split('=')
             if len(splitted_line) < 2:
                 splitted_line.append('')
             name, val = splitted_line
-            name = sanatize_input_name(name)
+            name = sanatize_var_name(name)
             if 'profile' in name and 'sigma' in name:
                 # sigma profile
                 # assume that 'gas.layers' is already parsed
@@ -336,3 +303,41 @@ def read_ctl(filename, ldim='level'):
     }
 
     return dataset
+
+
+def read_hbin_input(filename):
+    """
+    Read HBIN input file (ascii).
+
+    Parameters
+    ----------
+    filename : str
+        Name or path to the file.
+
+    Returns
+    ------
+    dict
+       A dictionary with input values.
+
+    """
+    def parse_map_lines(f):
+        name_mapper, param_mapper = {}
+        for i in range(int(get_next_line(f))):
+            gas_id_name, param = get_next_line(f).split('/')
+            gas_id, name = gas_id_name.split('_')
+            key = int(gas_id)
+            name_mapper[key], param_mapper[key] = name, param
+        return name_mapper, param_mapper
+
+    global_attrs = {'source': expand_path(filename)}
+    inputs = {}
+
+    with open(filename, 'r') as f:
+        inputs['ascii_output'] = True if get_next_line(f) == 'T' else False
+        inputs['linelist_root_path'] = expand_path(get_next_line(f))
+        inputs['gas_names'], inputs['linelist_files'] = parse_map_lines(f)
+        _, inputs['galatry_param_files'] = parse_map_lines(f)
+        _, inputs['CO2_line_mixing_files'] = parse_map_lines(f)
+        _, inputs['voigt_param_files'] = parse_map_lines(f)
+
+    return inputs

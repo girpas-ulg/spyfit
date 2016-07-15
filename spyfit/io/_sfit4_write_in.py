@@ -8,23 +8,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-
-def _format_line(values, fmt):
-    "fmt is either a string or a list of string of `values` length"
-    if isinstance(fmt, str):
-        fmt = [fmt] * len(values)
-    return ''.join([f.format(v) for f, v in zip(fmt, values)]) + '\n'
-
-
-def _format_array(arr, fmt='.18e', delimiter=' ', pad=0, left_pad=0,
-                  newline='\n', max_line_items=5):
-    sep = delimiter + " " * pad
-    n_splits = np.ceil(arr.size / max_line_items)
-    lines = []
-    for sub_arr in np.array_split(arr, n_splits):
-        str_items = sep.join(['{:{}}'.format(i, fmt) for i in sub_arr])
-        lines.append(" " * left_pad + str_items)
-    return newline.join(lines) + '\n'
+from .utils import format_line, format_array
 
 
 def write_reference(dataset, filename, map_gas_id_name,
@@ -36,9 +20,9 @@ def write_reference(dataset, filename, map_gas_id_name,
 
     Parameters
     ----------
-    dataset : dict or xr.Dataset
+    dataset : dict or xarray.Dataset
         Either a xarray dataset or a mapping that contains profile data
-        for ZPT and gas profiles.
+        for ZPT and gases.
         Values of the mapping may be array-like objects or dictionaries
         that must at least contain a 'data' item.
     filename : str
@@ -106,7 +90,7 @@ def write_reference(dataset, filename, map_gas_id_name,
             p[3] = np.zeros((n_levels), dtype='f')
 
     with open(filename, 'w') as ref_file:
-        ref_file.write(_format_line(
+        ref_file.write(format_line(
             (sfit4_ordering[ordering], n_levels, len(map_gas_id_name)),
             '{:>12}'
         ))
@@ -114,6 +98,20 @@ def write_reference(dataset, filename, map_gas_id_name,
             if id < 0:
                 ref_file.write(' {}\n'.format(description))
             else:
-                ref_file.write(_format_line((id, name, description),
-                                            ['{:>5}', '{:>8}', '{:>75}']))
-            ref_file.write(_format_array(data, fmt='.4E', pad=2, left_pad=2))
+                ref_file.write(format_line((id, name, description),
+                                           ['{:>5}', '{:>8}', '{:>75}']))
+            ref_file.write(format_array(data, fmt='.4E', pad=2, left_pad=2))
+
+
+def write_spectrum(dataset, filename, scan_metadata,):
+    """
+    Export input spectral data to SFIT4 ascii format.
+
+    Use this function to create 't15asc.4'.
+
+    Parameters
+    ----------
+    dataset : xarray.Dataset or list
+        xarray dataset
+    """
+    pass

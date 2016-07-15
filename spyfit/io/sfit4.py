@@ -8,6 +8,7 @@ import os
 
 import xarray as xr
 
+from .utils import expand_path
 from ._sfit4_read_out import (read_ak_matrix, read_aprfs, read_matrix,   # noqa
                               read_param_iterations, read_profiles, read_rprfs,
                               read_seinv_vector, read_single_spectra,
@@ -124,7 +125,7 @@ def load_sfit4(ctl_filename):
     `xarray.Dataset`
 
     """
-    ctl_path = os.path.expanduser(os.path.realpath(ctl_filename))
+    ctl_path = expand_path(ctl_filename)
     ctl_dir = os.path.dirname(ctl_path)
     dataset = xr.Dataset(**read_ctl(ctl_filename))
     sfit4_inputs = dataset.sfit4_ctl.attrs

@@ -11,6 +11,8 @@ import warnings
 
 import numpy as np
 
+from .utils import expand_path, sanatize_var_name, eval_value
+
 
 HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
                   r"[\w\s:-]*RUNTIME:(?P<runtime>[0-9:\-]+)"
@@ -28,11 +30,6 @@ def parse_header(line):
     header['description'] = header['description'].strip().lower()
 
     return header
-
-
-def sanatize_name(var_name):
-    """Sanatize `var_name` so that it works with autocompletion."""
-    return var_name.lower().replace('.', '__')
 
 
 def read_matrix(filename, var_name='', dims=''):
@@ -58,12 +55,12 @@ def read_matrix(filename, var_name='', dims=''):
 
     """
     if not var_name:
-        var_name = sanatize_name(os.path.basename(filename))
+        var_name = sanatize_var_name(os.path.basename(filename))
 
     with open(filename, 'r') as f:
         header = parse_header(f.readline())
         attrs = {'description': header.pop('description'),
-                 'source': os.path.abspath(filename)}
+                 'source': expand_path(filename)}
         global_attrs = header
 
         data_shape = tuple([int(d) for d in f.readline().split()
@@ -135,7 +132,7 @@ def read_table(filename, var_name='', dims=(), index_cols=True):
 
     """
     if not var_name:
-        var_name = sanatize_name(os.path.basename(filename))
+        var_name = sanatize_var_name(os.path.basename(filename))
 
     if not len(dims):
         dims = ('rows', 'cols')
@@ -143,7 +140,7 @@ def read_table(filename, var_name='', dims=(), index_cols=True):
     with open(filename, 'r') as f:
         header = parse_header(f.readline())
         attrs = {'description': header.pop('description'),
-                 'source': os.path.abspath(filename)}
+                 'source': expand_path(filename)}
         global_attrs = header
 
         nrows, ncols = [int(n) for n in f.readline().split()[:2]]
@@ -198,13 +195,13 @@ def read_profiles(filename, var_name_prefix='', ldim='level', ret_gases=False):
     """
     with open(filename, 'r') as f:
         header = parse_header(f.readline())
-        global_attrs = {'source': os.path.abspath(filename)}
+        global_attrs = {'source': expand_path(filename)}
         global_attrs.update(header)
 
         meta = f.readline().split()
         nrows = int(meta[1])
         retrieved_gases = [g.strip() for g in meta[3:]]
-        gas_index = list(map(int, f.readline().split()))
+        gas_index = [int(i) for i in f.readline().split()]
         col_names = [c.strip() for c in f.readline().split()]
         # TODO: redefine (and translate) the first 5 column names (coordinates)
 
@@ -294,7 +291,7 @@ def read_state_vector(filename, ldim='level', pdim='param'):
     with open(filename, 'r') as f:
         header = parse_header(f.readline())
         global_attrs = header
-        global_attrs['source'] = os.path.abspath(filename)
+        global_attrs['source'] = expand_path(filename)
 
         meta = f.readline().split()
         nlevels, niter, nitermax = list(map(int, meta[:3]))
@@ -391,7 +388,7 @@ def read_param_iterations(filename, vdim='statevector', idim='iteration'):
         header = parse_header(f.readline())
         attrs = {'description': header.pop('description')}
         global_attrs = header
-        global_attrs['source'] = os.path.abspath(filename)
+        global_attrs['source'] = expand_path(filename)
 
         n_params = int(f.readline())
         param_index = list(map(int, f.readline().split()))
@@ -465,7 +462,7 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
     with open(filename, 'r') as f:
         header = parse_header(f.readline())
         global_attrs = header
-        global_attrs['source'] = os.path.abspath(filename)
+        global_attrs['source'] = expand_path(filename)
 
         # n_fits = nb. of bands * nb. of spectra/scans used in each band
         n_fits, _ = list(map(int, f.readline().split()))
@@ -511,7 +508,7 @@ def read_spectra(filename, spdim='spectrum', idim='iteration',
 
             for block in range(int(math.ceil(1. * size / n_vals_line))):
                 for s, data in zip(slices, w_data):
-                    data += list(map(float, f.readline().split()))[s]
+                    data += [float(i) for i in f.readline().split()][s]
 
             for lbl, data in zip(labels, w_data):
                 if lbl == 'difference':
@@ -591,7 +588,7 @@ def read_single_spectrum(filename, var_name=None, wdim='spec_wn'):
     """
     raw_data = _read_single_spec(filename)
     gas, band_id, scan_id, iteration, wavenumber, data = raw_data
-    attrs = {'source': os.path.abspath(filename), 'gas': gas,
+    attrs = {'source': expand_path(filename), 'gas': gas,
              'band_id': band_id, 'scan_id': scan_id,
              'iteration': iteration}
 
@@ -600,7 +597,7 @@ def read_single_spectrum(filename, var_name=None, wdim='spec_wn'):
             gas, band_id, scan_id, iteration
         )
     if not var_name:
-        var_name = sanatize_name(os.path.basename(filename))
+        var_name = sanatize_var_name(os.path.basename(filename))
 
     wdim_band = '{}__band{}'.format(wdim, band_id)
 
@@ -651,12 +648,12 @@ def read_single_spectra(filename, spdim='spectrum', idim='iteration',
         A CDM-structured dictionary.
 
     """
-    global_attrs = {'source': os.path.abspath(filename)}
+    global_attrs = {'source': expand_path(filename)}
 
     file_data = [_read_single_spec(f) for f in glob.glob(filename)]
     if not file_data:
         raise ValueError('no single spectrum file found in {}'
-                         .format(os.path.abspath(filename)))
+                         .format(expand_path(filename)))
 
     keys = ('gas', 'band', 'scan', 'iteration', 'wn', 'spec')
     data_vals = {k: np.asarray(v) for k, v in zip(keys, zip(*file_data))}
@@ -763,10 +760,10 @@ def read_solar_spectrum(filename, var_name='', wdim='spec_wn_solar'):
     with open(filename, 'r') as f:
         header = parse_header(f.readline())
         global_attrs = header
-        global_attrs['source'] = os.path.abspath(filename)
+        global_attrs['source'] = expand_path(filename)
 
         if not var_name:
-            var_name = sanatize_name(os.path.basename(filename))
+            var_name = sanatize_var_name(os.path.basename(filename))
 
         size, _, wn_step = map(eval, f.readline().split())
 
@@ -821,7 +818,7 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
     with open(filename, 'r') as f:
         header = parse_header(f.readline())
         global_attrs = header
-        global_attrs['source'] = os.path.abspath(filename)
+        global_attrs['source'] = expand_path(filename)
 
         variables = {}
         coords = {}
@@ -839,18 +836,14 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         n_gases = int(f.readline())
         _ = f.readline()
         for i in range(n_gases):
-            cvals = [s.strip() for s in f.readline().split()]
-            index, name = int(cvals[0]), cvals[1]
-            ret_prof = True if cvals[2] == 'T' else False
-            atcol, rtcol = map(float, cvals[3:])
+            cvals = [eval_value(s) for s in f.readline().split()]
+            index, name, ret_prof, atcol, rtcol = cvals
             variables['apriori_total_column__' + name] = ((), atcol)
             attrs = {'has_retrieved_profile': ret_prof, 'index': index}
             variables['retrieved_total_column__' + name] = ((), rtcol, attrs)
 
         # bands and scans
         _ = f.readline()
-        icfuncs = [int, float, float, float, int, float, float, float, int]
-        jcfuncs = [int, float, float]
         ickeys = ['index', 'wn_start', 'wn_end', 'wn_step',
                   'n_points', 'spec_opd_max', 'spec_fov']
         jckeys = ['index', 'spec_snr_initial', 'spec_snr_calculated']
@@ -859,12 +852,12 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         _ = f.readline()
         for i in range(n_bands):
             icvals = [s.strip() for s in f.readline().split()]
-            d = {k: f(v) for k, f, v in zip(ickeys, icfuncs, icvals[:-1])}
+            d = {k: eval_value(v) for k, v in zip(ickeys, icvals[:-1])}
             scans = []
             for j in range(int(icvals[-1])):
                 jcvals = [s.strip() for s in f.readline().split()]
                 scans.append(
-                    {k: f(v) for k, f, v in zip(jckeys, jcfuncs, jcvals)}
+                    {k: eval_value(v) for k, v in zip(jckeys, jcvals)}
                 )
             d['scans'] = scans
             bands.append(d)
@@ -907,16 +900,14 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
 
         # other returned values
         _ = f.readline()
-        s2bool_func = lambda s: True if s.strip() == 'T' else False
-        cfuncs = [lambda s: float(s) / 100, float, float, float, float,
-                  int, int, s2bool_func, s2bool_func]
         # TODO: check names
         ckeys = ['fit_rms', 'chi_square_obs', 'dofs_total',
                  'dofs_trg', 'dofs_tpr', 'n_iteration', 'n_iteration_max',
                  'has_converged', 'has_division_warnings']
         _ = f.readline()
         cvals = [s.strip() for s in f.readline().split()]
-        attrs = {k: f(v) for k, f, v in zip(ckeys, cfuncs, cvals)}
+        attrs = {k: eval_value(v) for k, v in zip(ckeys, cvals)}
+        attrs['fit_rms'] /= 100   # convert value
         variables['sfit4_summary'] = ((), np.nan, attrs)
 
     dataset = {
