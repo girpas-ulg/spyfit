@@ -787,7 +787,7 @@ def read_solar_spectrum(filename, var_name='', wdim='spec_wn_solar'):
 
 def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
                  scoord='spec_scan', bcoord='spec_band',
-                 bdim='band', sdim='scan'):
+                 bdim='band', sdim='scan',ignore_case_header=False):
     """
     Read retrieval summary in SFIT4 output ascii files.
 
@@ -820,7 +820,7 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
 
     """
     with open(filename, 'r') as f:
-        header = parse_header(f.readline())
+        header = parse_header(f.readline(),ignore_case=ignore_case_header)
         global_attrs = header
         global_attrs['source'] = expand_path(filename)
 
