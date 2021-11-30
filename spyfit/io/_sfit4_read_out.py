@@ -19,9 +19,13 @@ HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
                   r"\s*(?P<description>.+)")
 
 
-def parse_header(line):
+def parse_header(line,ignore_case=False):
     """Parse the header line of an output file."""
-    m = re.match(HEADER_PATTERN, line)
+    if ignore_case:
+        m = re.match(HEADER_PATTERN, line)
+    else:
+        m = re.match(HEADER_PATTERN, line,re.IGNORECASE)
+    
     header = m.groupdict()
 
     runtime = datetime.datetime.strptime(header.pop('runtime'),
