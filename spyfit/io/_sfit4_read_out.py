@@ -22,9 +22,9 @@ HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
 def parse_header(line,ignore_case=False):
     """Parse the header line of an output file."""
     if ignore_case:
-        m = re.match(HEADER_PATTERN, line)
-    else:
         m = re.match(HEADER_PATTERN, line,re.IGNORECASE)
+    else:
+        m = re.match(HEADER_PATTERN, line)
     
     header = m.groupdict()
 
