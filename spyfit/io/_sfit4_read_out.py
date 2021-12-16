@@ -827,6 +827,10 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         variables = {}
         coords = {}
 
+        sfitversion = global_attrs['sfit4_version']
+        sfitversion = sfitversion.split('.')
+        sfitversion = float('{}.{}{}{}'.format(*sfitversion))
+               
         # spectrum headers (assume same header for every band)
         _ = f.readline()
         spec_headers = []
@@ -841,7 +845,11 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         _ = f.readline()
         for i in range(n_gases):
             cvals = [eval_value(s) for s in f.readline().split()]
-            index, name, ret_prof, atcol, rtcol = cvals
+            if sfitversion > 0.944:
+                index, name, ret_prof, ifcell, atcol, rtcol = cvals
+            else:
+                index, name, ret_prof, atcol, rtcol = cvals
+            
             variables['apriori_total_column__' + name] = ((), atcol)
             attrs = {'has_retrieved_profile': ret_prof, 'index': index}
             variables['retrieved_total_column__' + name] = ((), rtcol, attrs)
@@ -850,7 +858,12 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         _ = f.readline()
         ickeys = ['index', 'wn_start', 'wn_end', 'wn_step',
                   'n_points', 'spec_opd_max', 'spec_fov']
-        jckeys = ['index', 'spec_snr_initial', 'spec_snr_calculated']
+        if sfitversion > 0.944:
+            snr_var = ['spec_snr_initial', 'spec_snr_eff','spec_snr_fit']
+            jckeys = ['index'] + snr_var
+        else:
+            snr_var = ['spec_snr_initial', 'spec_snr_calculated']                       
+            jckeys = ['index'] + snr_var
         bands = []
         n_bands = int(f.readline())
         _ = f.readline()
@@ -895,7 +908,7 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         for vname in ('spec_fov', 'spec_opd_max'):
             variables[vname] = (bdim, np.array([b[vname] for b in bands]))
 
-        for vname in ('spec_snr_initial', 'spec_snr_calculated'):
+        for vname in snr_var:
             data = np.full((coords[bdim].size, coords[sdim].size), np.nan)
             for b in bands:
                 for s in b['scans']:
