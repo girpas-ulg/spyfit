@@ -837,7 +837,7 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
             header = f.readline().strip()
             if header not in spec_headers:
                 spec_headers.append(header)
-
+        global_attrs['spec_headers'] = spec_headers
         # retrieved gases
         _ = f.readline()
         n_gases = int(f.readline())
