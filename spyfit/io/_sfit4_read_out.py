@@ -16,7 +16,7 @@ from .utils import expand_path, sanatize_var_name, eval_value
 
 
 HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
-                  r"[\w\s:-]*RUNTIME:(?P<runtime>[0-9:\-]+)"
+                  r"[\w\s.:-]*RUNTIME:(?P<runtime>[0-9:\-]+)"
                   r"\s*(?P<description>.+)")
 
 
