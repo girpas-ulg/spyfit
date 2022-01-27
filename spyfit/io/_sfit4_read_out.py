@@ -20,7 +20,7 @@ HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
                   r"\s*(?P<description>.+)")
 
 
-def parse_header(line,ignore_case=False):
+def parse_header(line,ignore_case=True):
     """Parse the header line of an output file."""
     if ignore_case:
         m = re.match(HEADER_PATTERN, line,re.IGNORECASE)
