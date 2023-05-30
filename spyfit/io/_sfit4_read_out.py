@@ -13,12 +13,10 @@ import numpy as np
 
 from .utils import expand_path, sanatize_var_name, eval_value
 
-
-HEADER_PATTERN = (r"\s*SFIT4:V(?P<sfit4_version>[0-9.]+)"
-                  r"[\w\s:-]*RUNTIME:(?P<runtime>[0-9:\-]+)"
+HEADER_PATTERN = (r"\s*SFIT4:[vV](?P<sfit4_version>[0-9.]+)"
+                  r"\s*:(?P<release>[\W\w\s]+)"
+                  r"\s*RUNTIME:(?P<runtime>[0-9:\-]+)"
                   r"\s*(?P<description>.+)")
-
-
 def parse_header(line):
     """Parse the header line of an output file."""
     m = re.match(HEADER_PATTERN, line)
@@ -656,7 +654,7 @@ def read_single_spectra(filename, spdim='spectrum', idim='iteration',
                          .format(expand_path(filename)))
 
     keys = ('gas', 'band', 'scan', 'iteration', 'wn', 'spec')
-    data_vals = {k: np.asarray(v) for k, v in zip(keys, zip(*file_data))}
+    data_vals = {k: np.asarray(v, dtype =object) for k, v in zip(keys, zip(*file_data))}
     unique_vals = {k: np.unique(v) for k, v in data_vals.items()
                    if k not in ('wn', 'spec')}
 
@@ -837,7 +835,7 @@ def read_summary(filename, spdim='spectrum', wcoord='spec_wn',
         _ = f.readline()
         for i in range(n_gases):
             cvals = [eval_value(s) for s in f.readline().split()]
-            index, name, ret_prof, atcol, rtcol = cvals
+            index, name, ret_prof,is_cell, atcol, rtcol = cvals
             variables['apriori_total_column__' + name] = ((), atcol)
             attrs = {'has_retrieved_profile': ret_prof, 'index': index}
             variables['retrieved_total_column__' + name] = ((), rtcol, attrs)
