@@ -13,9 +13,9 @@ import numpy as np
 
 from .utils import expand_path, sanatize_var_name, eval_value
 
-HEADER_PATTERN = (r"\s*SFIT4:v(?P<sfit4_version>[0-9.]+)"
-                  r"\s*:Mod.\s*(?P<release>[a-zA-Z0-9:-]+)"
-                  r"[\w\s:-]*RUNTIME:(?P<runtime>[0-9:\-]+)"
+HEADER_PATTERN = (r"\s*SFIT4:[vV](?P<sfit4_version>[0-9.]+)"
+                  r"\s*:(?P<release>[\W\w\s]+)"
+                  r"\s*RUNTIME:(?P<runtime>[0-9:\-]+)"
                   r"\s*(?P<description>.+)")
 def parse_header(line):
     """Parse the header line of an output file."""
